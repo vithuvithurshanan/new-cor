@@ -1,0 +1,598 @@
+import React, { useState, useEffect } from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { DashboardStats, User, PricingConfig, Vehicle, Shipment, ShipmentStatus } from '../types';
+import { generateLogisticsReport, optimizePricingRules, generateNotificationTemplate } from '../services/geminiService';
+import { mockDataService } from '../services/mockDataService';
+import { TrendingUp, Package, AlertTriangle, CheckCircle, Sparkles, Loader2, Users, CreditCard, Bell, Search, Sliders, DollarSign, FileText, Server, Globe, Shield, Database, Activity, Wifi, Cpu, MessageSquare, Map as MapIcon, Truck, Wrench, ArrowRight, Filter } from 'lucide-react';
+
+const CHART_DATA = [
+  { name: 'Mon', shipments: 120, revenue: 2400 },
+  { name: 'Tue', shipments: 145, revenue: 2900 },
+  { name: 'Wed', shipments: 180, revenue: 3600 },
+  { name: 'Thu', shipments: 130, revenue: 2600 },
+  { name: 'Fri', shipments: 200, revenue: 4000 },
+  { name: 'Sat', shipments: 90, revenue: 1800 },
+  { name: 'Sun', shipments: 50, revenue: 1000 },
+];
+
+const INITIAL_PRICING: PricingConfig = {
+  baseRate: 10,
+  perKm: 0.5,
+  perKg: 2,
+  serviceMultipliers: { standard: 1, express: 1.5, sameDay: 2.5 },
+  peakHourSurcharge: 1.2
+};
+
+type AdminTab = 'OVERVIEW' | 'USERS' | 'ORDERS' | 'FLEET' | 'PRICING' | 'FINANCE' | 'NOTIFICATIONS' | 'SYSTEM';
+
+export const DashboardView: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<AdminTab>('OVERVIEW');
+  const [loadingAi, setLoadingAi] = useState(false);
+
+  // Data States
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+
+  // -- OVERVIEW STATES --
+  const [overviewReport, setOverviewReport] = useState<string | null>(null);
+
+  // -- PRICING STATES --
+  const [pricing, setPricing] = useState<PricingConfig>(INITIAL_PRICING);
+  const [pricingSuggestion, setPricingSuggestion] = useState<string | null>(null);
+
+  // -- NOTIFICATION STATES --
+  const [notifScenario, setNotifScenario] = useState('');
+  const [notifTemplate, setNotifTemplate] = useState('');
+
+  // -- ORDER MANAGEMENT STATES --
+  const [orderFilter, setOrderFilter] = useState<ShipmentStatus | 'ALL'>('ALL');
+
+  useEffect(() => {
+    const loadData = async () => {
+      const dashboardStats = await mockDataService.getDashboardStats();
+      setStats(dashboardStats);
+
+      const userList = await mockDataService.getUsers();
+      setUsers(userList);
+
+      const vehicleList = await mockDataService.getVehicles();
+      setVehicles(vehicleList);
+
+      const shipmentList = await mockDataService.getShipments();
+      setShipments(shipmentList);
+    };
+    loadData();
+  }, []);
+
+  // --- HANDLERS ---
+  const handleGenerateOverview = async () => {
+    if (!stats) return;
+    setLoadingAi(true);
+    const report = await generateLogisticsReport(stats, []);
+    setOverviewReport(report);
+    setLoadingAi(false);
+  };
+
+  const handleOptimizePricing = async () => {
+    setLoadingAi(true);
+    const suggestion = await optimizePricingRules(pricing);
+    setPricingSuggestion(suggestion);
+    setLoadingAi(false);
+  };
+
+  const handleGenerateTemplate = async () => {
+    if (!notifScenario) return;
+    setLoadingAi(true);
+    const template = await generateNotificationTemplate(notifScenario);
+    setNotifTemplate(template);
+    setLoadingAi(false);
+  };
+
+  const handleApproveOrder = async (id: string) => {
+    await mockDataService.updateShipmentStatus(id, ShipmentStatus.PICKUP_ASSIGNED, 'Hub Admin');
+    // Refresh data
+    const updatedShipments = await mockDataService.getShipments();
+    setShipments(updatedShipments);
+    const updatedStats = await mockDataService.getDashboardStats();
+    setStats(updatedStats);
+  };
+
+  // --- TAB RENDERERS ---
+
+  const renderOverview = () => (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Operational Overview</h2>
+          <p className="text-slate-500">Real-time system metrics.</p>
+        </div>
+        <button
+          onClick={handleGenerateOverview}
+          disabled={loadingAi || !stats}
+          className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-all flex items-center gap-2 font-medium disabled:opacity-70 shadow-lg shadow-indigo-200"
+        >
+          {loadingAi ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+          AI Daily Brief
+        </button>
+      </div>
+
+      {overviewReport && (
+        <div className="bg-gradient-to-r from-violet-50/80 to-indigo-50/80 backdrop-blur-md border border-indigo-100/60 rounded-xl p-6 shadow-sm">
+          <div className="flex gap-3">
+            <Sparkles className="text-indigo-600 mt-1" size={20} />
+            <div className="prose prose-sm max-w-none text-slate-700">
+              {overviewReport.split('\n').map((line, i) => <p key={i} className="mb-1">{line}</p>)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {stats && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <StatCard title="Total Shipments" value={stats.totalShipments} icon={Package} color="blue" />
+          <StatCard title="Active In-Transit" value={stats.active} icon={TrendingUp} color="indigo" />
+          <StatCard title="Delivered" value={stats.delivered} icon={CheckCircle} color="emerald" />
+          <StatCard title="Delayed / Issues" value={stats.delayed} icon={AlertTriangle} color="red" />
+        </div>
+      )}
+
+      <div className="bg-white/70 backdrop-blur-xl p-6 rounded-2xl shadow-xl border border-white/60">
+        <h3 className="text-lg font-semibold text-slate-800 mb-6">Revenue vs Volume</h3>
+        <div className="h-72">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={CHART_DATA}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} />
+              <YAxis yAxisId="left" axisLine={false} tickLine={false} />
+              <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} />
+              <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
+              <Bar yAxisId="left" dataKey="shipments" fill="#6366f1" radius={[4, 4, 0, 0]} name="Shipments" />
+              <Bar yAxisId="right" dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} name="Revenue ($)" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderUserManagement = () => (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">User Management</h2>
+          <p className="text-slate-500">Manage customers, riders, and staff.</p>
+        </div>
+        <div className="flex gap-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
+            <input type="text" placeholder="Search users..." className="pl-10 pr-4 py-2 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none" />
+          </div>
+          <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-medium shadow-md hover:bg-indigo-700">+ Add User</button>
+        </div>
+      </div>
+
+      <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-sm border border-white/60 overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-slate-50/80 border-b border-slate-100">
+            <tr>
+              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">User</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Role</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Status</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {users.map(user => (
+              <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">
+                      {user.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-medium text-slate-800">{user.name}</p>
+                      <p className="text-xs text-slate-500">{user.email}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wide
+                    ${user.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' :
+                      user.role === 'RIDER' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}
+                  `}>
+                    {user.role.replace('_', ' ')}
+                  </span>
+                </td>
+                <td className="px-6 py-4">
+                  <span className={`flex items-center gap-1.5 text-xs font-medium
+                    ${user.status === 'ACTIVE' ? 'text-emerald-600' : 'text-slate-400'}
+                  `}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${user.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                    {user.status}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <button className="text-slate-400 hover:text-indigo-600 transition-colors"><MessageSquare size={18} /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const renderOrderManagement = () => {
+    const filteredShipments = orderFilter === 'ALL'
+      ? shipments
+      : shipments.filter(s => s.currentStatus === orderFilter);
+
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-800">Shipments & Orders</h2>
+            <p className="text-slate-500">Track and manage active deliveries.</p>
+          </div>
+          <div className="flex gap-2">
+            <select
+              className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5"
+              value={orderFilter}
+              onChange={(e) => setOrderFilter(e.target.value as any)}
+            >
+              <option value="ALL">All Status</option>
+              <option value="PLACED">Placed (New)</option>
+              <option value="PICKUP_ASSIGNED">Pickup Assigned</option>
+              <option value="IN_TRANSIT">In Transit</option>
+              <option value="DELIVERED">Delivered</option>
+              <option value="EXCEPTION">Exception</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-sm border border-white/60 overflow-hidden">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50/80 border-b border-slate-100">
+              <tr>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Tracking ID</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Recipient</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Destination</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Status</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredShipments.length > 0 ? (
+                filteredShipments.map(shipment => (
+                  <tr key={shipment.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-4 font-mono font-medium text-indigo-600">{shipment.id}</td>
+                    <td className="px-6 py-4 text-slate-800">{shipment.recipientName}</td>
+                    <td className="px-6 py-4 text-slate-600 text-sm truncate max-w-[200px]">{shipment.destination}</td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wide
+                        ${shipment.currentStatus === 'PLACED' ? 'bg-blue-100 text-blue-700' :
+                          shipment.currentStatus === 'DELIVERED' ? 'bg-emerald-100 text-emerald-700' :
+                            shipment.currentStatus === 'EXCEPTION' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}
+                      `}>
+                        {shipment.currentStatus.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      {shipment.currentStatus === 'PLACED' && (
+                        <button
+                          onClick={() => handleApproveOrder(shipment.id)}
+                          className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                        >
+                          Approve & Assign
+                        </button>
+                      )}
+                      {shipment.currentStatus !== 'PLACED' && (
+                        <button className="text-slate-400 hover:text-indigo-600 transition-colors text-xs font-medium">View Details</button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
+                    <Package size={48} className="mx-auto mb-3 opacity-20" />
+                    <p>No shipments found matching filter.</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  const renderFleetManagement = () => (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Fleet Management</h2>
+          <p className="text-slate-500">Vehicle status and maintenance tracking.</p>
+        </div>
+        <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-medium shadow-md hover:bg-indigo-700">+ Add Vehicle</button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {vehicles.map(vehicle => (
+          <div key={vehicle.id} className="bg-white/80 backdrop-blur-xl p-6 rounded-2xl border border-white/60 shadow-sm hover:shadow-lg transition-all group">
+            <div className="flex justify-between items-start mb-4">
+              <div className="p-3 bg-slate-100 rounded-xl group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
+                {vehicle.type === 'BIKE' ? <Users size={24} /> : <Truck size={24} />}
+              </div>
+              <span className={`px-2 py-1 rounded-md text-xs font-bold
+                 ${vehicle.status === 'AVAILABLE' ? 'bg-emerald-100 text-emerald-700' :
+                  vehicle.status === 'IN_USE' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}
+               `}>
+                {vehicle.status.replace('_', ' ')}
+              </span>
+            </div>
+
+            <h3 className="text-lg font-bold text-slate-800 mb-1">{vehicle.plateNumber}</h3>
+            <p className="text-sm text-slate-500 mb-4 capitalize">{vehicle.type.toLowerCase()} • {vehicle.capacity}</p>
+
+            <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+              <span className="flex items-center gap-1"><Wrench size={12} /> Last Service</span>
+              <span>{vehicle.lastMaintenance}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderPricingEngine = () => (
+    <div className="max-w-4xl space-y-6 animate-fade-in">
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Smart Pricing Engine</h2>
+          <p className="text-slate-500">Configure base rates and surcharges.</p>
+        </div>
+        <button
+          onClick={handleOptimizePricing}
+          disabled={loadingAi}
+          className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white px-5 py-2 rounded-xl font-bold hover:shadow-lg transition-all flex items-center gap-2 disabled:opacity-70"
+        >
+          {loadingAi ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+          AI Optimize
+        </button>
+      </div>
+
+      {pricingSuggestion && (
+        <div className="bg-violet-50/90 backdrop-blur-md border border-violet-100 p-6 rounded-2xl flex items-start gap-4 shadow-sm animate-in slide-in-from-top-4">
+          <div className="p-2 bg-violet-100 rounded-full text-violet-600"><Sparkles size={20} /></div>
+          <div>
+            <h4 className="font-bold text-violet-900 mb-1">Recommendation</h4>
+            <p className="text-slate-700 text-sm leading-relaxed">{pricingSuggestion}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white/80 backdrop-blur-xl p-8 rounded-2xl border border-white/60 shadow-lg grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div>
+          <label className="block text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+            <DollarSign size={16} /> Base Configuration
+          </label>
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs text-slate-500 font-medium">Base Rate ($)</label>
+              <input type="number" value={pricing.baseRate} onChange={e => setPricing({ ...pricing, baseRate: Number(e.target.value) })} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 font-medium">Per Km Rate ($)</label>
+              <input type="number" value={pricing.perKm} onChange={e => setPricing({ ...pricing, perKm: Number(e.target.value) })} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 font-medium">Per Kg Rate ($)</label>
+              <input type="number" value={pricing.perKg} onChange={e => setPricing({ ...pricing, perKg: Number(e.target.value) })} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg" />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+            <Sliders size={16} /> Multipliers
+          </label>
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs text-slate-500 font-medium">Express Service (x)</label>
+              <input type="number" step="0.1" value={pricing.serviceMultipliers.express} onChange={e => setPricing({ ...pricing, serviceMultipliers: { ...pricing.serviceMultipliers, express: Number(e.target.value) } })} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 font-medium">Same Day Service (x)</label>
+              <input type="number" step="0.1" value={pricing.serviceMultipliers.sameDay} onChange={e => setPricing({ ...pricing, serviceMultipliers: { ...pricing.serviceMultipliers, sameDay: Number(e.target.value) } })} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 font-medium">Peak Hour Surcharge (x)</label>
+              <input type="number" step="0.1" value={pricing.peakHourSurcharge} onChange={e => setPricing({ ...pricing, peakHourSurcharge: Number(e.target.value) })} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderFinance = () => (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Financial Reports</h2>
+          <p className="text-slate-500">Revenue streams and profit analysis.</p>
+        </div>
+      </div>
+      <div className="h-96 bg-white/80 backdrop-blur-xl p-6 rounded-2xl border border-white/60 shadow-lg">
+        <h3 className="font-bold text-slate-800 mb-6">Revenue Trend (7 Days)</h3>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={CHART_DATA}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+            <XAxis dataKey="name" axisLine={false} tickLine={false} />
+            <YAxis axisLine={false} tickLine={false} />
+            <Tooltip />
+            <Line type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 8 }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+
+  const renderNotifications = () => (
+    <div className="max-w-2xl space-y-6 animate-fade-in">
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Notification Hub</h2>
+          <p className="text-slate-500">Generate and manage customer alerts.</p>
+        </div>
+      </div>
+
+      <div className="bg-white/80 backdrop-blur-xl p-8 rounded-2xl border border-white/60 shadow-lg">
+        <div className="mb-6">
+          <label className="block text-sm font-bold text-slate-700 mb-2">Describe Scenario</label>
+          <textarea
+            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none h-32 resize-none"
+            placeholder="e.g. A severe weather alert delaying all packages in the North region..."
+            value={notifScenario}
+            onChange={e => setNotifScenario(e.target.value)}
+          ></textarea>
+        </div>
+
+        <button
+          onClick={handleGenerateTemplate}
+          disabled={!notifScenario || loadingAi}
+          className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+        >
+          {loadingAi ? <Loader2 className="animate-spin" /> : 'Generate AI Template'}
+        </button>
+
+        {notifTemplate && (
+          <div className="mt-8 pt-8 border-t border-slate-100 animate-in fade-in">
+            <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Generated Template</label>
+            <div className="p-6 bg-slate-50 rounded-xl border border-slate-200 text-slate-700 font-mono text-sm leading-relaxed">
+              {notifTemplate}
+            </div>
+            <div className="flex gap-3 mt-4">
+              <button className="flex-1 py-2 border border-slate-200 rounded-lg text-slate-600 font-medium hover:bg-slate-50">Edit</button>
+              <button className="flex-1 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 shadow-md">Save Template</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderSystemArchitecture = () => (
+    <div className="space-y-6 animate-fade-in">
+      <div>
+        <h2 className="text-2xl font-bold text-slate-800">System Status</h2>
+        <p className="text-slate-500">Infrastructure health monitoring.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <SystemCard icon={Server} label="API Gateway" status="Operational" ping="45ms" />
+        <SystemCard icon={Database} label="Primary DB" status="Operational" ping="12ms" />
+        <SystemCard icon={Globe} label="CDN & Static" status="Operational" ping="88ms" />
+        <SystemCard icon={Cpu} label="AI Inference" status="High Load" ping="240ms" statusColor="amber" />
+      </div>
+    </div>
+  );
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'OVERVIEW': return renderOverview();
+      case 'USERS': return renderUserManagement();
+      case 'ORDERS': return renderOrderManagement();
+      case 'FLEET': return renderFleetManagement();
+      case 'PRICING': return renderPricingEngine();
+      case 'FINANCE': return renderFinance();
+      case 'NOTIFICATIONS': return renderNotifications();
+      case 'SYSTEM': return renderSystemArchitecture();
+      default: return renderOverview();
+    }
+  };
+
+  return (
+    <div className="flex flex-col lg:flex-row gap-8 h-[calc(100vh-6rem)]">
+      {/* Sidebar for Dashboard */}
+      <div className="w-full lg:w-64 flex-shrink-0 space-y-2 overflow-y-auto pr-2 custom-scrollbar pb-4">
+        <DashboardTab id="OVERVIEW" label="Overview" icon={Activity} active={activeTab} onClick={setActiveTab} />
+        <div className="h-px bg-slate-200/50 my-2"></div>
+        <DashboardTab id="USERS" label="User Management" icon={Users} active={activeTab} onClick={setActiveTab} />
+        <DashboardTab id="ORDERS" label="Shipments & Orders" icon={FileText} active={activeTab} onClick={setActiveTab} />
+        <DashboardTab id="FLEET" label="Fleet Management" icon={Truck} active={activeTab} onClick={setActiveTab} />
+        <DashboardTab id="PRICING" label="Smart Pricing" icon={DollarSign} active={activeTab} onClick={setActiveTab} />
+        <DashboardTab id="FINANCE" label="Financial Reports" icon={CreditCard} active={activeTab} onClick={setActiveTab} />
+        <DashboardTab id="NOTIFICATIONS" label="Notifications AI" icon={Bell} active={activeTab} onClick={setActiveTab} />
+        <div className="h-px bg-slate-200/50 my-2"></div>
+        <DashboardTab id="SYSTEM" label="System Status" icon={Server} active={activeTab} onClick={setActiveTab} />
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar pb-10">
+        {renderContent()}
+      </div>
+    </div>
+  );
+};
+
+// --- SUB-COMPONENTS ---
+
+const StatCard = ({ title, value, icon: Icon, color }: any) => {
+  const colors: Record<string, string> = {
+    blue: "bg-blue-50 text-blue-600",
+    indigo: "bg-indigo-50 text-indigo-600",
+    emerald: "bg-emerald-50 text-emerald-600",
+    amber: "bg-amber-50 text-amber-600",
+    red: "bg-red-50 text-red-600",
+  };
+
+  return (
+    <div className="bg-white/80 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-white/60 flex items-center gap-4 hover:shadow-md transition-shadow">
+      <div className={`p-4 rounded-xl ${colors[color] || colors.blue}`}>
+        <Icon size={24} />
+      </div>
+      <div>
+        <p className="text-slate-500 text-sm font-medium">{title}</p>
+        <p className="text-2xl font-bold text-slate-800">{value}</p>
+      </div>
+    </div>
+  );
+};
+
+const DashboardTab = ({ id, label, icon: Icon, active, onClick }: { id: AdminTab, label: string, icon: any, active: AdminTab, onClick: (id: AdminTab) => void }) => (
+  <button
+    onClick={() => onClick(id)}
+    className={`
+      w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all
+      ${active === id ? 'bg-indigo-600/10 text-indigo-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}
+    `}
+  >
+    <Icon size={18} />
+    {label}
+  </button>
+);
+
+const SystemCard = ({ icon: Icon, label, status, ping, statusColor = 'emerald' }: any) => {
+  const colorClass = statusColor === 'emerald' ? 'text-emerald-600 bg-emerald-50' : 'text-amber-600 bg-amber-50';
+  const dotClass = statusColor === 'emerald' ? 'bg-emerald-500' : 'bg-amber-500';
+
+  return (
+    <div className="bg-white/80 backdrop-blur-xl p-5 rounded-2xl border border-white/60 shadow-sm">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="p-2 bg-slate-100 rounded-lg text-slate-600"><Icon size={20} /></div>
+        <span className="font-bold text-slate-700">{label}</span>
+      </div>
+      <div className="flex justify-between items-center text-sm">
+        <span className={`px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1.5 ${colorClass}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`}></span>
+          {status}
+        </span>
+        <span className="text-slate-400 flex items-center gap-1"><Wifi size={12} /> {ping}</span>
+      </div>
+    </div>
+  );
+}

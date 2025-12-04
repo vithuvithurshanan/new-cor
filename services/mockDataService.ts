@@ -1,0 +1,205 @@
+import { Shipment, ShipmentStatus, RiderTask, User, Hub, Vehicle, DashboardStats } from '../types';
+
+// Mock Data Store
+class MockDataService {
+  private shipments: Shipment[] = [
+    {
+      id: 'TRK-885210',
+      recipientName: 'Sarah Jenkins',
+      destination: '123 Maple Ave, Springfield',
+      currentStatus: ShipmentStatus.IN_TRANSIT,
+      estimatedDelivery: '2023-10-25',
+      events: [
+        { status: ShipmentStatus.PLACED, timestamp: '2023-10-23 09:00', description: 'Order placed' },
+        { status: ShipmentStatus.PICKED, timestamp: '2023-10-23 14:00', description: 'Picked up by rider' },
+        { status: ShipmentStatus.IN_TRANSIT, timestamp: '2023-10-24 08:00', description: 'Arrived at regional hub' }
+      ]
+    },
+    {
+      id: 'TRK-992100',
+      recipientName: 'Tech Solutions Inc',
+      destination: '45 Corporate Blvd, Metro City',
+      currentStatus: ShipmentStatus.DELIVERED,
+      estimatedDelivery: '2023-10-22',
+      events: [
+        { status: ShipmentStatus.PLACED, timestamp: '2023-10-20 10:00', description: 'Order placed' },
+        { status: ShipmentStatus.DELIVERED, timestamp: '2023-10-22 11:30', description: 'Delivered to reception' }
+      ]
+    },
+    {
+      id: 'TRK-774321',
+      recipientName: 'John Doe',
+      destination: '789 Oak St, Gotham',
+      currentStatus: ShipmentStatus.EXCEPTION,
+      estimatedDelivery: '2023-10-24',
+      events: [
+        { status: ShipmentStatus.PLACED, timestamp: '2023-10-21 09:00', description: 'Order placed' },
+        { status: ShipmentStatus.EXCEPTION, timestamp: '2023-10-23 16:00', description: 'Delivery attempted - recipient not home' }
+      ]
+    }
+  ];
+
+  private riderTasks: RiderTask[] = [
+    {
+      id: 'TSK-101',
+      type: 'PICKUP',
+      status: 'PENDING',
+      address: '55 Elm St, Downtown',
+      customerName: 'Alice Cooper',
+      timeSlot: '10:00 AM - 12:00 PM',
+      packageDetails: 'Small Box (2kg)',
+      earnings: 15.50,
+      distance: '2.5 km'
+    },
+    {
+      id: 'TSK-102',
+      type: 'DELIVERY',
+      status: 'ACCEPTED',
+      address: '123 Maple Ave, Springfield',
+      customerName: 'Sarah Jenkins',
+      timeSlot: '01:00 PM - 03:00 PM',
+      packageDetails: 'Medium Box (5kg)',
+      earnings: 22.00,
+      distance: '5.1 km'
+    }
+  ];
+
+  private hubs: Hub[] = [
+    {
+      id: 'HUB-001',
+      code: 'NYC-CEN',
+      name: 'New York Central',
+      type: 'CENTRAL',
+      manager: 'Hubert Manager',
+      capacity: 10000,
+      currentLoad: 7500
+    },
+    {
+      id: 'HUB-002',
+      code: 'BOS-REG',
+      name: 'Boston Regional',
+      type: 'REGIONAL',
+      manager: 'Sarah Connor',
+      capacity: 5000,
+      currentLoad: 2100
+    }
+  ];
+
+  // Methods
+
+  // Shipments
+  getShipments(): Promise<Shipment[]> {
+    return Promise.resolve([...this.shipments]);
+  }
+
+  getShipmentById(id: string): Promise<Shipment | undefined> {
+    return Promise.resolve(this.shipments.find(s => s.id === id));
+  }
+
+  createShipment(shipment: Omit<Shipment, 'id' | 'events' | 'currentStatus'>): Promise<Shipment> {
+    const newShipment: Shipment = {
+      ...shipment,
+      id: `TRK-${Math.floor(Math.random() * 1000000)}`,
+      currentStatus: ShipmentStatus.PLACED,
+      events: [
+        {
+          status: ShipmentStatus.PLACED,
+          timestamp: new Date().toLocaleString(),
+          description: 'Order placed successfully'
+        }
+      ]
+    };
+    this.shipments.unshift(newShipment);
+    return Promise.resolve(newShipment);
+  }
+
+  updateShipmentStatus(id: string, status: ShipmentStatus, location?: string): Promise<void> {
+    const shipment = this.shipments.find(s => s.id === id);
+    if (shipment) {
+      shipment.currentStatus = status;
+      shipment.events.push({
+        status,
+        timestamp: new Date().toLocaleString(),
+        description: `Status updated to ${status}`,
+        location: location || 'In Transit'
+      });
+
+      // Automatically create a Rider Task when Pickup is Assigned
+      if (status === ShipmentStatus.PICKUP_ASSIGNED) {
+        const newTask: RiderTask = {
+          id: `TSK-${Math.floor(Math.random() * 10000)}`,
+          type: 'PICKUP',
+          status: 'PENDING',
+          address: shipment.destination.split(',')[0], // Simplified address
+          customerName: shipment.recipientName,
+          timeSlot: 'ASAP',
+          packageDetails: 'Standard Package',
+          earnings: 12.50, // Mock earnings
+          distance: '3.2 km' // Mock distance
+        };
+        this.riderTasks.unshift(newTask);
+      }
+    }
+    return Promise.resolve();
+  }
+
+  // Dashboard Stats
+  getDashboardStats(): Promise<DashboardStats> {
+    const active = this.shipments.filter(s => s.currentStatus !== ShipmentStatus.DELIVERED).length;
+    const delivered = this.shipments.filter(s => s.currentStatus === ShipmentStatus.DELIVERED).length;
+    const delayed = this.shipments.filter(s => s.currentStatus === ShipmentStatus.DELAYED || s.currentStatus === ShipmentStatus.EXCEPTION).length;
+
+    return Promise.resolve({
+      totalShipments: this.shipments.length,
+      active,
+      delivered,
+      delayed
+    });
+  }
+
+  // Rider Tasks
+  getRiderTasks(): Promise<RiderTask[]> {
+    return Promise.resolve([...this.riderTasks]);
+  }
+
+  updateTaskStatus(taskId: string, status: RiderTask['status']): Promise<void> {
+    const task = this.riderTasks.find(t => t.id === taskId);
+    if (task) {
+      task.status = status;
+    }
+    return Promise.resolve();
+  }
+
+  // Hubs
+  getHubs(): Promise<Hub[]> {
+    return Promise.resolve([...this.hubs]);
+  }
+
+  // Users
+  private users: User[] = [
+    { id: 'U1', name: 'Alice Smith', role: 'CUSTOMER', email: 'alice@example.com', phone: '+1234567890', status: 'ACTIVE' },
+    { id: 'U2', name: 'Bob Jones', role: 'RIDER', email: 'bob@courieros.com', phone: '+1987654321', status: 'ACTIVE' },
+    { id: 'U3', name: 'Charlie Admin', role: 'ADMIN', email: 'admin@courieros.com', phone: '+1122334455', status: 'ACTIVE' },
+    { id: 'U4', name: 'Hubert Manager', role: 'HUB_MANAGER', email: 'hub1@courieros.com', phone: '+1555666777', status: 'INACTIVE' },
+    { id: 'U5', name: 'Frank Finance', role: 'FINANCE', email: 'billing@courieros.com', phone: '+1555999000', status: 'ACTIVE' },
+    { id: 'U6', name: 'Sarah Support', role: 'SUPPORT', email: 'help@courieros.com', phone: '+1888000111', status: 'ACTIVE' },
+    { id: 'U7', name: 'Steve Staff', role: 'HUB_STAFF', email: 'staff1@courieros.com', phone: '+1888000222', status: 'ACTIVE' },
+  ];
+
+  getUsers(): Promise<User[]> {
+    return Promise.resolve([...this.users]);
+  }
+
+  // Vehicles
+  private vehicles: Vehicle[] = [
+    { id: 'V1', type: 'TRUCK', plateNumber: 'XYZ-123', status: 'IN_USE', currentDriverId: 'U2', capacity: '2000kg', lastMaintenance: '2023-10-15' },
+    { id: 'V2', type: 'VAN', plateNumber: 'ABC-789', status: 'AVAILABLE', capacity: '800kg', lastMaintenance: '2023-11-01' },
+    { id: 'V3', type: 'BIKE', plateNumber: 'BK-55', status: 'MAINTENANCE', capacity: '20kg', lastMaintenance: '2023-12-05' },
+  ];
+
+  getVehicles(): Promise<Vehicle[]> {
+    return Promise.resolve([...this.vehicles]);
+  }
+}
+
+export const mockDataService = new MockDataService();
