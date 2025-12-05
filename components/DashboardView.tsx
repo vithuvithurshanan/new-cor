@@ -4,6 +4,7 @@ import { DashboardStats, User, PricingConfig, Vehicle, Shipment, ShipmentStatus 
 import { generateLogisticsReport, optimizePricingRules, generateNotificationTemplate } from '../services/geminiService';
 import { mockDataService } from '../services/mockDataService';
 import { TrendingUp, Package, AlertTriangle, CheckCircle, Sparkles, Loader2, Users, CreditCard, Bell, Search, Sliders, DollarSign, FileText, Server, Globe, Shield, Database, Activity, Wifi, Cpu, MessageSquare, Map as MapIcon, Truck, Wrench, ArrowRight, Filter } from 'lucide-react';
+import { ShipmentDetailsModal } from './ShipmentDetailsModal';
 
 const CHART_DATA = [
   { name: 'Mon', shipments: 120, revenue: 2400 },
@@ -48,6 +49,17 @@ export const DashboardView: React.FC = () => {
 
   // -- ORDER MANAGEMENT STATES --
   const [orderFilter, setOrderFilter] = useState<ShipmentStatus | 'ALL'>('ALL');
+
+  // -- MODAL STATES --
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [showAddVehicleModal, setShowAddVehicleModal] = useState(false);
+  const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [editUserForm, setEditUserForm] = useState({ name: '', email: '', phone: '', role: 'CUSTOMER', status: 'ACTIVE' });
+  const [newUserForm, setNewUserForm] = useState({ name: '', email: '', phone: '', role: 'CUSTOMER' });
+  const [newVehicleForm, setNewVehicleForm] = useState({ plateNumber: '', type: 'VAN', capacity: '' });
+  const [showViewShipmentModal, setShowViewShipmentModal] = useState(false);
+  const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -97,6 +109,74 @@ export const DashboardView: React.FC = () => {
     setShipments(updatedShipments);
     const updatedStats = await mockDataService.getDashboardStats();
     setStats(updatedStats);
+  };
+
+  const handleAddUser = () => {
+    setShowAddUserModal(true);
+  };
+
+  const saveNewUser = () => {
+    console.log('Creating new user:', newUserForm);
+    // Add user to state
+    const newUser: User = {
+      id: `USR-${Date.now()}`,
+      name: newUserForm.name,
+      email: newUserForm.email,
+      phone: newUserForm.phone,
+      role: newUserForm.role as any,
+      status: 'ACTIVE'
+    };
+    setUsers([...users, newUser]);
+    setShowAddUserModal(false);
+    setNewUserForm({ name: '', email: '', phone: '', role: 'CUSTOMER' });
+  };
+
+  const handleAddVehicle = () => {
+    setShowAddVehicleModal(true);
+  };
+
+  const saveNewVehicle = () => {
+    console.log('Creating new vehicle:', newVehicleForm);
+    // Add vehicle to state
+    const newVehicle: Vehicle = {
+      id: `VEH-${Date.now()}`,
+      plateNumber: newVehicleForm.plateNumber,
+      type: newVehicleForm.type as any,
+      capacity: newVehicleForm.capacity,
+      status: 'AVAILABLE',
+      lastMaintenance: new Date().toLocaleDateString()
+    };
+    setVehicles([...vehicles, newVehicle]);
+    setShowAddVehicleModal(false);
+    setNewVehicleForm({ plateNumber: '', type: 'VAN', capacity: '' });
+  };
+
+  const handleViewUser = (user: User) => {
+    setSelectedUser(user);
+    setEditUserForm({
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      status: user.status
+    });
+    setShowEditUserModal(true);
+  };
+
+  const saveUserChanges = () => {
+    if (!selectedUser) return;
+    console.log('Updating user:', editUserForm);
+    // Update user in state
+    setUsers(users.map(u =>
+      u.id === selectedUser.id ? { ...u, ...editUserForm } : u
+    ));
+    setShowEditUserModal(false);
+    setSelectedUser(null);
+  };
+
+  const handleViewShipment = (shipment: Shipment) => {
+    setSelectedShipment(shipment);
+    setShowViewShipmentModal(true);
   };
 
   // --- TAB RENDERERS ---
@@ -169,7 +249,12 @@ export const DashboardView: React.FC = () => {
             <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
             <input type="text" placeholder="Search users..." className="pl-10 pr-4 py-2 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none" />
           </div>
-          <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-medium shadow-md hover:bg-indigo-700">+ Add User</button>
+          <button
+            onClick={handleAddUser}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-medium shadow-md hover:bg-indigo-700"
+          >
+            + Add User
+          </button>
         </div>
       </div>
 
@@ -214,7 +299,13 @@ export const DashboardView: React.FC = () => {
                   </span>
                 </td>
                 <td className="px-6 py-4 text-right">
-                  <button className="text-slate-400 hover:text-indigo-600 transition-colors"><MessageSquare size={18} /></button>
+                  <button
+                    onClick={() => handleViewUser(user)}
+                    className="text-slate-400 hover:text-indigo-600 transition-colors"
+                    title="View/Edit User"
+                  >
+                    <MessageSquare size={18} />
+                  </button>
                 </td>
               </tr>
             ))}
@@ -289,7 +380,12 @@ export const DashboardView: React.FC = () => {
                         </button>
                       )}
                       {shipment.currentStatus !== 'PLACED' && (
-                        <button className="text-slate-400 hover:text-indigo-600 transition-colors text-xs font-medium">View Details</button>
+                        <button
+                          onClick={() => handleViewShipment(shipment)}
+                          className="text-slate-400 hover:text-indigo-600 transition-colors text-xs font-medium"
+                        >
+                          View Details
+                        </button>
                       )}
                     </td>
                   </tr>
@@ -316,7 +412,12 @@ export const DashboardView: React.FC = () => {
           <h2 className="text-2xl font-bold text-slate-800">Fleet Management</h2>
           <p className="text-slate-500">Vehicle status and maintenance tracking.</p>
         </div>
-        <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-medium shadow-md hover:bg-indigo-700">+ Add Vehicle</button>
+        <button
+          onClick={handleAddVehicle}
+          className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-medium shadow-md hover:bg-indigo-700"
+        >
+          + Add Vehicle
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -535,6 +636,247 @@ export const DashboardView: React.FC = () => {
       <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar pb-10">
         {renderContent()}
       </div>
+
+      {/* Add User Modal */}
+      {showAddUserModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 animate-in slide-in-from-bottom-4">
+            <h3 className="text-xl font-bold text-slate-800 mb-4">Add New User</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  value={newUserForm.name}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, name: e.target.value })}
+                  placeholder="John Doe"
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
+                <input
+                  type="email"
+                  value={newUserForm.email}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, email: e.target.value })}
+                  placeholder="john@example.com"
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
+                <input
+                  type="tel"
+                  value={newUserForm.phone}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, phone: e.target.value })}
+                  placeholder="+1 234 567 8900"
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
+                <select
+                  value={newUserForm.role}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, role: e.target.value })}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                >
+                  <option value="CUSTOMER">Customer</option>
+                  <option value="RIDER">Rider</option>
+                  <option value="HUB_MANAGER">Hub Manager</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </div>
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                <p className="text-xs text-blue-700">
+                  <strong>Note:</strong> User will receive an email with login instructions.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowAddUserModal(false);
+                  setNewUserForm({ name: '', email: '', phone: '', role: 'CUSTOMER' });
+                }}
+                className="flex-1 py-2.5 border border-slate-200 rounded-lg text-slate-600 font-medium hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveNewUser}
+                disabled={!newUserForm.name || !newUserForm.email}
+                className="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Add User
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Vehicle Modal */}
+      {showAddVehicleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 animate-in slide-in-from-bottom-4">
+            <h3 className="text-xl font-bold text-slate-800 mb-4">Add New Vehicle</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Plate Number</label>
+                <input
+                  type="text"
+                  value={newVehicleForm.plateNumber}
+                  onChange={(e) => setNewVehicleForm({ ...newVehicleForm, plateNumber: e.target.value })}
+                  placeholder="ABC-1234"
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none uppercase"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Vehicle Type</label>
+                <select
+                  value={newVehicleForm.type}
+                  onChange={(e) => setNewVehicleForm({ ...newVehicleForm, type: e.target.value })}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                >
+                  <option value="BIKE">Bike</option>
+                  <option value="VAN">Van</option>
+                  <option value="TRUCK">Truck</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Capacity</label>
+                <input
+                  type="text"
+                  value={newVehicleForm.capacity}
+                  onChange={(e) => setNewVehicleForm({ ...newVehicleForm, capacity: e.target.value })}
+                  placeholder="e.g., 500kg or 20 packages"
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
+                <p className="text-xs text-amber-700">
+                  <strong>Note:</strong> Vehicle will be marked as AVAILABLE and ready for assignment.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowAddVehicleModal(false);
+                  setNewVehicleForm({ plateNumber: '', type: 'VAN', capacity: '' });
+                }}
+                className="flex-1 py-2.5 border border-slate-200 rounded-lg text-slate-600 font-medium hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveNewVehicle}
+                disabled={!newVehicleForm.plateNumber || !newVehicleForm.capacity}
+                className="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Add Vehicle
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {showEditUserModal && selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 animate-in slide-in-from-bottom-4">
+            <h3 className="text-xl font-bold text-slate-800 mb-4">Edit User Details</h3>
+            <div className="space-y-4">
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <p className="text-xs text-slate-500 uppercase font-bold mb-1">User ID</p>
+                <p className="font-mono text-sm text-slate-800">{selectedUser.id}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  value={editUserForm.name}
+                  onChange={(e) => setEditUserForm({ ...editUserForm, name: e.target.value })}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
+                <input
+                  type="email"
+                  value={editUserForm.email}
+                  onChange={(e) => setEditUserForm({ ...editUserForm, email: e.target.value })}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
+                <input
+                  type="tel"
+                  value={editUserForm.phone}
+                  onChange={(e) => setEditUserForm({ ...editUserForm, phone: e.target.value })}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
+                  <select
+                    value={editUserForm.role}
+                    onChange={(e) => setEditUserForm({ ...editUserForm, role: e.target.value })}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  >
+                    <option value="CUSTOMER">Customer</option>
+                    <option value="RIDER">Rider</option>
+                    <option value="HUB_MANAGER">Hub Manager</option>
+                    <option value="ADMIN">Admin</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                  <select
+                    value={editUserForm.status}
+                    onChange={(e) => setEditUserForm({ ...editUserForm, status: e.target.value })}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  >
+                    <option value="ACTIVE">Active</option>
+                    <option value="INACTIVE">Inactive</option>
+                  </select>
+                </div>
+              </div>
+              <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
+                <p className="text-xs text-amber-700">
+                  <strong>Note:</strong> Changing the role or status will affect user permissions and access.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowEditUserModal(false);
+                  setSelectedUser(null);
+                }}
+                className="flex-1 py-2.5 border border-slate-200 rounded-lg text-slate-600 font-medium hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveUserChanges}
+                disabled={!editUserForm.name || !editUserForm.email}
+                className="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Shipment Modal */}
+      <ShipmentDetailsModal
+        isOpen={showViewShipmentModal}
+        onClose={() => setShowViewShipmentModal(false)}
+        shipment={selectedShipment}
+      />
     </div>
   );
 };

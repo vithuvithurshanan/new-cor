@@ -25,7 +25,9 @@ export interface ShipmentEvent {
 
 export interface Shipment {
   id: string;
+  senderId?: string; // ID of the user who sent the package
   recipientName: string;
+  recipientEmail?: string; // Email of the recipient
   destination: string;
   currentStatus: ShipmentStatus;
   estimatedDelivery: string;
@@ -39,7 +41,7 @@ export interface DashboardStats {
   delayed: number;
 }
 
-export type ViewState = 'DASHBOARD' | 'TRACKING' | 'AI_ASSISTANT' | 'NEW_SHIPMENT' | 'RIDER' | 'HUB_MANAGER' | 'PROFILE';
+export type ViewState = 'DASHBOARD' | 'TRACKING' | 'NEW_SHIPMENT' | 'AI_ASSISTANT' | 'RIDER' | 'HUB_MANAGER' | 'PROFILE' | 'MY_ORDERS';
 
 // Rider Module Types
 export type RiderTaskType = 'PICKUP' | 'DELIVERY';

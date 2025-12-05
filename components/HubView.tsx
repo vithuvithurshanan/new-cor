@@ -31,6 +31,13 @@ export const HubView: React.FC = () => {
   const [selectedDestination, setSelectedDestination] = useState('');
   const [routingAdvice, setRoutingAdvice] = useState<string | null>(null);
 
+  // -- MODAL STATES --
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showEditHubModal, setShowEditHubModal] = useState(false);
+  const [showCreateManifestModal, setShowCreateManifestModal] = useState(false);
+  const [selectedHub, setSelectedHub] = useState<Hub | null>(null);
+  const [editHubForm, setEditHubForm] = useState({ name: '', manager: '', capacity: 0 });
+
   useEffect(() => {
     const loadHubs = async () => {
       const data = await mockDataService.getHubs();
@@ -59,6 +66,40 @@ export const HubView: React.FC = () => {
     const suggestion = await suggestStorageLocation(mockPackage.description);
     setAiStorageSuggestion(suggestion);
     setLoadingAi(false);
+  };
+
+  const handleConfirmStorage = () => {
+    if (!scannedPackage || !aiStorageSuggestion) return;
+    setShowConfirmModal(true);
+  };
+
+  const confirmStorageAction = () => {
+    // Update package status and assign to storage
+    console.log(`Package ${scannedPackage.id} stored at: ${aiStorageSuggestion}`);
+    // Reset form
+    setScanInput('');
+    setScannedPackage(null);
+    setAiStorageSuggestion(null);
+    setShowConfirmModal(false);
+  };
+
+  const handleEditHub = (hub: Hub) => {
+    setSelectedHub(hub);
+    setEditHubForm({ name: hub.name, manager: hub.manager, capacity: hub.capacity });
+    setShowEditHubModal(true);
+  };
+
+  const saveHubChanges = () => {
+    if (!selectedHub) return;
+    console.log('Saving hub changes:', editHubForm);
+    // Update hub in state
+    setHubs(hubs.map(h => h.id === selectedHub.id ? { ...h, ...editHubForm } : h));
+    setShowEditHubModal(false);
+    setSelectedHub(null);
+  };
+
+  const handleCreateManifest = () => {
+    setShowCreateManifestModal(true);
   };
 
   const handleOptimizeRoute = async () => {
@@ -194,7 +235,10 @@ export const HubView: React.FC = () => {
                   </div>
                   <p className="text-slate-700 text-lg">{aiStorageSuggestion}</p>
                 </div>
-                <button className="bg-violet-600 text-white px-6 py-2 rounded-xl font-medium hover:bg-violet-700 shadow-md">
+                <button
+                  onClick={handleConfirmStorage}
+                  className="bg-violet-600 text-white px-6 py-2 rounded-xl font-medium hover:bg-violet-700 shadow-md transition-colors"
+                >
                   Confirm & Store
                 </button>
               </div>
@@ -209,7 +253,12 @@ export const HubView: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-slate-800">Outbound Manifests</h2>
-        <button className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-200">+ Create Manifest</button>
+        <button
+          onClick={handleCreateManifest}
+          className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-200"
+        >
+          + Create Manifest
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -363,7 +412,12 @@ export const HubView: React.FC = () => {
                   </div>
                 </td>
                 <td className="px-6 py-4 text-right">
-                  <button className="text-indigo-600 hover:underline font-medium text-xs">Edit</button>
+                  <button
+                    onClick={() => handleEditHub(hub)}
+                    className="text-indigo-600 hover:underline font-medium text-xs"
+                  >
+                    Edit
+                  </button>
                 </td>
               </tr>
             ))}
@@ -406,6 +460,164 @@ export const HubView: React.FC = () => {
       <div className="flex-1">
         {renderContent()}
       </div>
+
+      {/* Confirm Storage Modal */}
+      {showConfirmModal && scannedPackage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in slide-in-from-bottom-4">
+            <h3 className="text-xl font-bold text-slate-800 mb-4">Confirm Storage</h3>
+            <div className="space-y-4">
+              <div className="bg-slate-50 p-4 rounded-xl">
+                <p className="text-sm text-slate-600 mb-2">Package ID</p>
+                <p className="font-mono font-bold text-slate-900">{scannedPackage.id}</p>
+              </div>
+              <div className="bg-gradient-to-r from-violet-50 to-fuchsia-50 p-4 rounded-xl border border-violet-100">
+                <p className="text-sm text-violet-700 font-medium mb-1 flex items-center gap-2">
+                  <Sparkles size={16} />
+                  AI Recommended Location
+                </p>
+                <p className="text-lg font-bold text-violet-900">{aiStorageSuggestion}</p>
+              </div>
+              <p className="text-sm text-slate-600">
+                Confirm to store this package at the recommended location.
+              </p>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 py-2.5 border border-slate-200 rounded-lg text-slate-600 font-medium hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmStorageAction}
+                className="flex-1 py-2.5 bg-violet-600 text-white rounded-lg font-medium hover:bg-violet-700 shadow-md transition-colors"
+              >
+                Confirm & Store
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Hub Modal */}
+      {showEditHubModal && selectedHub && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 animate-in slide-in-from-bottom-4">
+            <h3 className="text-xl font-bold text-slate-800 mb-4">Edit Hub Details</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Hub Name</label>
+                <input
+                  type="text"
+                  value={editHubForm.name}
+                  onChange={(e) => setEditHubForm({ ...editHubForm, name: e.target.value })}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Manager</label>
+                <input
+                  type="text"
+                  value={editHubForm.manager}
+                  onChange={(e) => setEditHubForm({ ...editHubForm, manager: e.target.value })}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Capacity</label>
+                <input
+                  type="number"
+                  value={editHubForm.capacity}
+                  onChange={(e) => setEditHubForm({ ...editHubForm, capacity: Number(e.target.value) })}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                <p className="text-xs text-blue-700">
+                  <strong>Hub Code:</strong> {selectedHub.code} (Read-only)
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowEditHubModal(false);
+                  setSelectedHub(null);
+                }}
+                className="flex-1 py-2.5 border border-slate-200 rounded-lg text-slate-600 font-medium hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveHubChanges}
+                className="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 shadow-md transition-colors"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Manifest Modal */}
+      {showCreateManifestModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 animate-in slide-in-from-bottom-4">
+            <h3 className="text-xl font-bold text-slate-800 mb-4">Create New Manifest</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Destination Hub</label>
+                <select className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                  <option value="">Select destination...</option>
+                  <option value="HUB-NORTH">North Regional Hub</option>
+                  <option value="HUB-SOUTH">South Regional Hub</option>
+                  <option value="HUB-WEST">West Local Hub</option>
+                  <option value="HUB-EAST">East Regional Hub</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Driver ID</label>
+                <input
+                  type="text"
+                  placeholder="e.g., DRV-123"
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Package Count</label>
+                <input
+                  type="number"
+                  placeholder="Number of packages"
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
+                <p className="text-xs text-amber-700">
+                  <strong>Note:</strong> Manifest will be generated with a unique ID and timestamp.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowCreateManifestModal(false)}
+                className="flex-1 py-2.5 border border-slate-200 rounded-lg text-slate-600 font-medium hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  console.log('Creating manifest...');
+                  setShowCreateManifestModal(false);
+                }}
+                className="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 shadow-md transition-colors"
+              >
+                Create Manifest
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

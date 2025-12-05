@@ -1,22 +1,45 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Truck, ArrowRight, ShieldCheck, Sparkles, AlertCircle, Info, CreditCard, Wallet, Banknote, Loader2, CheckCircle, User } from 'lucide-react';
+import { Package, Truck, ArrowRight, ShieldCheck, Sparkles, AlertCircle, Info, CreditCard, Wallet, Banknote, Loader2, CheckCircle, User, MapPin, XCircle, Navigation } from 'lucide-react';
 import { getPackagingAdvice } from '../services/geminiService';
 import { mockDataService } from '../services/mockDataService';
 import { PaymentMethod, ShipmentStatus } from '../types';
+import { Address, validateAddress, validateStreet, validateCity, validateState, validateZipCode, US_STATES, formatAddress } from '../utils/addressValidation';
+import { geocodeAddress, Coordinates } from '../utils/geocoding';
+import { calculateRouteDistance, formatDistance, RouteDistance } from '../utils/distanceCalculation';
 
 export const PlaceOrderView: React.FC = () => {
   const [formData, setFormData] = useState({
     recipientName: '',
-    pickupAddress: '',
-    dropoffAddress: '',
+    pickupAddress: {
+      street: '',
+      city: '',
+      state: '',
+      zipCode: ''
+    },
+    dropoffAddress: {
+      street: '',
+      city: '',
+      state: '',
+      zipCode: ''
+    },
     weight: 1,
     description: '',
     serviceType: 'STANDARD' // 'STANDARD' | 'EXPRESS' | 'SAME_DAY'
   });
 
+  // Address validation states
+  const [pickupErrors, setPickupErrors] = useState<{ street?: string; city?: string; state?: string; zipCode?: string }>({});
+  const [dropoffErrors, setDropoffErrors] = useState<{ street?: string; city?: string; state?: string; zipCode?: string }>({});
+  const [touchedFields, setTouchedFields] = useState<{ [key: string]: boolean }>({});
+
+  // Distance calculation states
+  const [distanceInfo, setDistanceInfo] = useState<RouteDistance | null>(null);
+  const [calculatingDistance, setCalculatingDistance] = useState(false);
+  const [distanceError, setDistanceError] = useState<string | null>(null);
+
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
   const [loadingAdvice, setLoadingAdvice] = useState(false);
-  const [quote, setQuote] = useState({ price: 0, eta: '' });
+  const [quote, setQuote] = useState({ price: 0, eta: '', basePrice: 0, distancePrice: 0 });
 
   // Payment States
   const [showPayment, setShowPayment] = useState(false);
@@ -25,13 +48,14 @@ export const PlaceOrderView: React.FC = () => {
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [createdShipmentId, setCreatedShipmentId] = useState('');
 
-  // Mock Price Calculation
+  // Price Calculation with Distance
   useEffect(() => {
-    let basePrice = 10;
+    const basePrice = 10;
     const weightPrice = formData.weight * 2;
+    const distancePrice = distanceInfo ? distanceInfo.totalMiles * 2 : 0; // $2 per mile
     const multiplier = formData.serviceType === 'SAME_DAY' ? 2.5 : formData.serviceType === 'EXPRESS' ? 1.5 : 1;
 
-    const finalPrice = (basePrice + weightPrice) * multiplier;
+    const finalPrice = (basePrice + weightPrice + distancePrice) * multiplier;
 
     let eta = '';
     const today = new Date();
@@ -47,8 +71,66 @@ export const PlaceOrderView: React.FC = () => {
       eta = standard.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     }
 
-    setQuote({ price: Math.round(finalPrice), eta });
-  }, [formData]);
+    setQuote({
+      price: Math.round(finalPrice),
+      eta,
+      basePrice: Math.round((basePrice + weightPrice) * multiplier),
+      distancePrice: Math.round(distancePrice * multiplier)
+    });
+  }, [formData, distanceInfo]);
+
+  // Calculate distance when both addresses are valid
+  useEffect(() => {
+    const calculateDistance = async () => {
+      // Check if both addresses are valid
+      const pickupValidation = validateAddress(formData.pickupAddress);
+      const dropoffValidation = validateAddress(formData.dropoffAddress);
+
+      if (!pickupValidation.isValid || !dropoffValidation.isValid) {
+        // Reset distance if addresses become invalid
+        if (distanceInfo) {
+          setDistanceInfo(null);
+          setDistanceError(null);
+        }
+        return;
+      }
+
+      setCalculatingDistance(true);
+      setDistanceError(null);
+
+      try {
+        // Geocode both addresses
+        const pickupResult = await geocodeAddress(formData.pickupAddress);
+        const dropoffResult = await geocodeAddress(formData.dropoffAddress);
+
+        if (!pickupResult.success) {
+          setDistanceError(`Pickup address: ${pickupResult.error}`);
+          setCalculatingDistance(false);
+          return;
+        }
+
+        if (!dropoffResult.success) {
+          setDistanceError(`Dropoff address: ${dropoffResult.error}`);
+          setCalculatingDistance(false);
+          return;
+        }
+
+        // Calculate route distance
+        const route = calculateRouteDistance(
+          pickupResult.coordinates!,
+          dropoffResult.coordinates!
+        );
+
+        setDistanceInfo(route);
+        setCalculatingDistance(false);
+      } catch (error) {
+        setDistanceError('Failed to calculate distance. Using weight-based pricing.');
+        setCalculatingDistance(false);
+      }
+    };
+
+    calculateDistance();
+  }, [formData.pickupAddress, formData.dropoffAddress]);
 
   const handleGetAdvice = async () => {
     if (!formData.description) return;
@@ -60,7 +142,34 @@ export const PlaceOrderView: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setShowPayment(true);
+
+    // Validate both addresses
+    const pickupValidation = validateAddress(formData.pickupAddress);
+    const dropoffValidation = validateAddress(formData.dropoffAddress);
+
+    // Update error states
+    setPickupErrors(pickupValidation.errors);
+    setDropoffErrors(dropoffValidation.errors);
+
+    // Mark all fields as touched to show errors
+    setTouchedFields({
+      'pickup-street': true,
+      'pickup-city': true,
+      'pickup-state': true,
+      'pickup-zip': true,
+      'dropoff-street': true,
+      'dropoff-city': true,
+      'dropoff-state': true,
+      'dropoff-zip': true,
+    });
+
+    // Only proceed if both addresses are valid
+    if (pickupValidation.isValid && dropoffValidation.isValid) {
+      setShowPayment(true);
+    } else {
+      // Scroll to top to show errors
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handlePayment = async () => {
@@ -70,7 +179,7 @@ export const PlaceOrderView: React.FC = () => {
       // Create shipment in mock service
       const newShipment = await mockDataService.createShipment({
         recipientName: formData.recipientName,
-        destination: formData.dropoffAddress,
+        destination: formatAddress(formData.dropoffAddress),
         estimatedDelivery: quote.eta,
       });
 
@@ -139,28 +248,315 @@ export const PlaceOrderView: React.FC = () => {
             </div>
 
             {/* Addresses */}
-            <div className="grid grid-cols-1 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Pickup Address</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Street, City, Zip"
-                  className="w-full p-3 bg-white/60 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                  value={formData.pickupAddress}
-                  onChange={e => setFormData({ ...formData, pickupAddress: e.target.value })}
-                />
+            <div className="space-y-6">
+              {/* Pickup Address */}
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
+                  <MapPin size={16} className="text-indigo-600" />
+                  Pickup Address
+                </label>
+
+                {/* Street */}
+                <div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Street Address (e.g., 123 Main Street)"
+                    className={`w-full p-3 bg-white/60 border rounded-xl focus:ring-2 outline-none transition-all ${touchedFields['pickup-street'] && pickupErrors.street
+                      ? 'border-red-300 focus:ring-red-500'
+                      : touchedFields['pickup-street'] && !pickupErrors.street && formData.pickupAddress.street
+                        ? 'border-emerald-300 focus:ring-emerald-500'
+                        : 'border-slate-200 focus:ring-indigo-500'
+                      }`}
+                    value={formData.pickupAddress.street}
+                    onChange={e => {
+                      const newPickup = { ...formData.pickupAddress, street: e.target.value };
+                      setFormData({ ...formData, pickupAddress: newPickup });
+                      if (touchedFields['pickup-street']) {
+                        const error = validateStreet(e.target.value);
+                        setPickupErrors({ ...pickupErrors, street: error || undefined });
+                      }
+                    }}
+                    onBlur={() => {
+                      setTouchedFields({ ...touchedFields, 'pickup-street': true });
+                      const error = validateStreet(formData.pickupAddress.street);
+                      setPickupErrors({ ...pickupErrors, street: error || undefined });
+                    }}
+                  />
+                  {touchedFields['pickup-street'] && pickupErrors.street && (
+                    <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                      <XCircle size={12} />
+                      {pickupErrors.street}
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {/* City */}
+                  <div>
+                    <input
+                      type="text"
+                      required
+                      placeholder="City"
+                      className={`w-full p-3 bg-white/60 border rounded-xl focus:ring-2 outline-none transition-all ${touchedFields['pickup-city'] && pickupErrors.city
+                        ? 'border-red-300 focus:ring-red-500'
+                        : touchedFields['pickup-city'] && !pickupErrors.city && formData.pickupAddress.city
+                          ? 'border-emerald-300 focus:ring-emerald-500'
+                          : 'border-slate-200 focus:ring-indigo-500'
+                        }`}
+                      value={formData.pickupAddress.city}
+                      onChange={e => {
+                        const newPickup = { ...formData.pickupAddress, city: e.target.value };
+                        setFormData({ ...formData, pickupAddress: newPickup });
+                        if (touchedFields['pickup-city']) {
+                          const error = validateCity(e.target.value);
+                          setPickupErrors({ ...pickupErrors, city: error || undefined });
+                        }
+                      }}
+                      onBlur={() => {
+                        setTouchedFields({ ...touchedFields, 'pickup-city': true });
+                        const error = validateCity(formData.pickupAddress.city);
+                        setPickupErrors({ ...pickupErrors, city: error || undefined });
+                      }}
+                    />
+                    {touchedFields['pickup-city'] && pickupErrors.city && (
+                      <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                        <XCircle size={12} />
+                        {pickupErrors.city}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* State */}
+                  <div>
+                    <select
+                      required
+                      className={`w-full p-3 bg-white/60 border rounded-xl focus:ring-2 outline-none transition-all ${touchedFields['pickup-state'] && pickupErrors.state
+                        ? 'border-red-300 focus:ring-red-500'
+                        : touchedFields['pickup-state'] && !pickupErrors.state && formData.pickupAddress.state
+                          ? 'border-emerald-300 focus:ring-emerald-500'
+                          : 'border-slate-200 focus:ring-indigo-500'
+                        }`}
+                      value={formData.pickupAddress.state}
+                      onChange={e => {
+                        const newPickup = { ...formData.pickupAddress, state: e.target.value };
+                        setFormData({ ...formData, pickupAddress: newPickup });
+                        if (touchedFields['pickup-state']) {
+                          const error = validateState(e.target.value);
+                          setPickupErrors({ ...pickupErrors, state: error || undefined });
+                        }
+                      }}
+                      onBlur={() => {
+                        setTouchedFields({ ...touchedFields, 'pickup-state': true });
+                        const error = validateState(formData.pickupAddress.state);
+                        setPickupErrors({ ...pickupErrors, state: error || undefined });
+                      }}
+                    >
+                      <option value="">State</option>
+                      {US_STATES.map(state => (
+                        <option key={state.code} value={state.code}>
+                          {state.code} - {state.name}
+                        </option>
+                      ))}
+                    </select>
+                    {touchedFields['pickup-state'] && pickupErrors.state && (
+                      <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                        <XCircle size={12} />
+                        {pickupErrors.state}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* ZIP Code */}
+                <div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ZIP Code (e.g., 12345 or 12345-6789)"
+                    className={`w-full p-3 bg-white/60 border rounded-xl focus:ring-2 outline-none transition-all ${touchedFields['pickup-zip'] && pickupErrors.zipCode
+                      ? 'border-red-300 focus:ring-red-500'
+                      : touchedFields['pickup-zip'] && !pickupErrors.zipCode && formData.pickupAddress.zipCode
+                        ? 'border-emerald-300 focus:ring-emerald-500'
+                        : 'border-slate-200 focus:ring-indigo-500'
+                      }`}
+                    value={formData.pickupAddress.zipCode}
+                    onChange={e => {
+                      const newPickup = { ...formData.pickupAddress, zipCode: e.target.value };
+                      setFormData({ ...formData, pickupAddress: newPickup });
+                      if (touchedFields['pickup-zip']) {
+                        const error = validateZipCode(e.target.value);
+                        setPickupErrors({ ...pickupErrors, zipCode: error || undefined });
+                      }
+                    }}
+                    onBlur={() => {
+                      setTouchedFields({ ...touchedFields, 'pickup-zip': true });
+                      const error = validateZipCode(formData.pickupAddress.zipCode);
+                      setPickupErrors({ ...pickupErrors, zipCode: error || undefined });
+                    }}
+                  />
+                  {touchedFields['pickup-zip'] && pickupErrors.zipCode && (
+                    <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                      <XCircle size={12} />
+                      {pickupErrors.zipCode}
+                    </p>
+                  )}
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Drop-off Address</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Street, City, Zip"
-                  className="w-full p-3 bg-white/60 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                  value={formData.dropoffAddress}
-                  onChange={e => setFormData({ ...formData, dropoffAddress: e.target.value })}
-                />
+
+              {/* Dropoff Address */}
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
+                  <MapPin size={16} className="text-indigo-600" />
+                  Drop-off Address
+                </label>
+
+                {/* Street */}
+                <div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Street Address (e.g., 456 Oak Avenue)"
+                    className={`w-full p-3 bg-white/60 border rounded-xl focus:ring-2 outline-none transition-all ${touchedFields['dropoff-street'] && dropoffErrors.street
+                      ? 'border-red-300 focus:ring-red-500'
+                      : touchedFields['dropoff-street'] && !dropoffErrors.street && formData.dropoffAddress.street
+                        ? 'border-emerald-300 focus:ring-emerald-500'
+                        : 'border-slate-200 focus:ring-indigo-500'
+                      }`}
+                    value={formData.dropoffAddress.street}
+                    onChange={e => {
+                      const newDropoff = { ...formData.dropoffAddress, street: e.target.value };
+                      setFormData({ ...formData, dropoffAddress: newDropoff });
+                      if (touchedFields['dropoff-street']) {
+                        const error = validateStreet(e.target.value);
+                        setDropoffErrors({ ...dropoffErrors, street: error || undefined });
+                      }
+                    }}
+                    onBlur={() => {
+                      setTouchedFields({ ...touchedFields, 'dropoff-street': true });
+                      const error = validateStreet(formData.dropoffAddress.street);
+                      setDropoffErrors({ ...dropoffErrors, street: error || undefined });
+                    }}
+                  />
+                  {touchedFields['dropoff-street'] && dropoffErrors.street && (
+                    <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                      <XCircle size={12} />
+                      {dropoffErrors.street}
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {/* City */}
+                  <div>
+                    <input
+                      type="text"
+                      required
+                      placeholder="City"
+                      className={`w-full p-3 bg-white/60 border rounded-xl focus:ring-2 outline-none transition-all ${touchedFields['dropoff-city'] && dropoffErrors.city
+                        ? 'border-red-300 focus:ring-red-500'
+                        : touchedFields['dropoff-city'] && !dropoffErrors.city && formData.dropoffAddress.city
+                          ? 'border-emerald-300 focus:ring-emerald-500'
+                          : 'border-slate-200 focus:ring-indigo-500'
+                        }`}
+                      value={formData.dropoffAddress.city}
+                      onChange={e => {
+                        const newDropoff = { ...formData.dropoffAddress, city: e.target.value };
+                        setFormData({ ...formData, dropoffAddress: newDropoff });
+                        if (touchedFields['dropoff-city']) {
+                          const error = validateCity(e.target.value);
+                          setDropoffErrors({ ...dropoffErrors, city: error || undefined });
+                        }
+                      }}
+                      onBlur={() => {
+                        setTouchedFields({ ...touchedFields, 'dropoff-city': true });
+                        const error = validateCity(formData.dropoffAddress.city);
+                        setDropoffErrors({ ...dropoffErrors, city: error || undefined });
+                      }}
+                    />
+                    {touchedFields['dropoff-city'] && dropoffErrors.city && (
+                      <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                        <XCircle size={12} />
+                        {dropoffErrors.city}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* State */}
+                  <div>
+                    <select
+                      required
+                      className={`w-full p-3 bg-white/60 border rounded-xl focus:ring-2 outline-none transition-all ${touchedFields['dropoff-state'] && dropoffErrors.state
+                        ? 'border-red-300 focus:ring-red-500'
+                        : touchedFields['dropoff-state'] && !dropoffErrors.state && formData.dropoffAddress.state
+                          ? 'border-emerald-300 focus:ring-emerald-500'
+                          : 'border-slate-200 focus:ring-indigo-500'
+                        }`}
+                      value={formData.dropoffAddress.state}
+                      onChange={e => {
+                        const newDropoff = { ...formData.dropoffAddress, state: e.target.value };
+                        setFormData({ ...formData, dropoffAddress: newDropoff });
+                        if (touchedFields['dropoff-state']) {
+                          const error = validateState(e.target.value);
+                          setDropoffErrors({ ...dropoffErrors, state: error || undefined });
+                        }
+                      }}
+                      onBlur={() => {
+                        setTouchedFields({ ...touchedFields, 'dropoff-state': true });
+                        const error = validateState(formData.dropoffAddress.state);
+                        setDropoffErrors({ ...dropoffErrors, state: error || undefined });
+                      }}
+                    >
+                      <option value="">State</option>
+                      {US_STATES.map(state => (
+                        <option key={state.code} value={state.code}>
+                          {state.code} - {state.name}
+                        </option>
+                      ))}
+                    </select>
+                    {touchedFields['dropoff-state'] && dropoffErrors.state && (
+                      <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                        <XCircle size={12} />
+                        {dropoffErrors.state}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* ZIP Code */}
+                <div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ZIP Code (e.g., 12345 or 12345-6789)"
+                    className={`w-full p-3 bg-white/60 border rounded-xl focus:ring-2 outline-none transition-all ${touchedFields['dropoff-zip'] && dropoffErrors.zipCode
+                      ? 'border-red-300 focus:ring-red-500'
+                      : touchedFields['dropoff-zip'] && !dropoffErrors.zipCode && formData.dropoffAddress.zipCode
+                        ? 'border-emerald-300 focus:ring-emerald-500'
+                        : 'border-slate-200 focus:ring-indigo-500'
+                      }`}
+                    value={formData.dropoffAddress.zipCode}
+                    onChange={e => {
+                      const newDropoff = { ...formData.dropoffAddress, zipCode: e.target.value };
+                      setFormData({ ...formData, dropoffAddress: newDropoff });
+                      if (touchedFields['dropoff-zip']) {
+                        const error = validateZipCode(e.target.value);
+                        setDropoffErrors({ ...dropoffErrors, zipCode: error || undefined });
+                      }
+                    }}
+                    onBlur={() => {
+                      setTouchedFields({ ...touchedFields, 'dropoff-zip': true });
+                      const error = validateZipCode(formData.dropoffAddress.zipCode);
+                      setDropoffErrors({ ...dropoffErrors, zipCode: error || undefined });
+                    }}
+                  />
+                  {touchedFields['dropoff-zip'] && dropoffErrors.zipCode && (
+                    <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                      <XCircle size={12} />
+                      {dropoffErrors.zipCode}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -276,13 +672,66 @@ export const PlaceOrderView: React.FC = () => {
               <span className="text-slate-400">Weight</span>
               <span className="font-medium">{formData.weight} kg</span>
             </div>
+
+            {/* Distance Information */}
+            {calculatingDistance && (
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">Distance</span>
+                <span className="font-medium text-blue-400 flex items-center gap-2">
+                  <Loader2 size={14} className="animate-spin" />
+                  Calculating...
+                </span>
+              </div>
+            )}
+
+            {distanceInfo && !calculatingDistance && (
+              <div className="space-y-2 border-t border-slate-700 pt-3">
+                <div className="flex items-center gap-2 text-xs text-slate-400 mb-2">
+                  <Navigation size={14} />
+                  <span>Route Distance</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">Company → Pickup</span>
+                  <span className="font-medium text-slate-300">{formatDistance(distanceInfo.segments.companyToPickup)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">Pickup → Dropoff</span>
+                  <span className="font-medium text-slate-300">{formatDistance(distanceInfo.segments.pickupToDropoff)}</span>
+                </div>
+                <div className="flex justify-between text-sm font-bold border-t border-slate-700 pt-2">
+                  <span className="text-slate-300">Total Distance</span>
+                  <span className="text-emerald-400">{formatDistance(distanceInfo.totalMiles)}</span>
+                </div>
+              </div>
+            )}
+
+            {distanceError && (
+              <div className="flex items-start gap-2 text-xs text-amber-400 bg-amber-500/10 p-2 rounded">
+                <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                <span>{distanceError}</span>
+              </div>
+            )}
+
             <div className="flex justify-between text-sm">
               <span className="text-slate-400">Estimated Delivery</span>
               <span className="font-medium text-emerald-400">{quote.eta}</span>
             </div>
           </div>
 
+
           <div className="bg-slate-800/80 rounded-xl p-4 mb-6">
+            {distanceInfo && (
+              <div className="space-y-2 mb-3 pb-3 border-b border-slate-700">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400">Base + Weight</span>
+                  <span className="text-slate-300">${quote.basePrice}.00</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400">Distance ({distanceInfo.totalMiles.toFixed(1)} mi × $2)</span>
+                  <span className="text-slate-300">${quote.distancePrice}.00</span>
+                </div>
+              </div>
+            )}
             <div className="flex justify-between items-center mb-1">
               <span className="text-slate-400 text-sm">Estimated Total</span>
               <span className="text-2xl font-bold">${quote.price}.00</span>

@@ -8,11 +8,12 @@ import { RiderView } from './components/RiderView';
 import { HubView } from './components/HubView';
 import { LoginView } from './components/LoginView';
 import { ProfileView } from './components/ProfileView';
-import { LayoutDashboard, PackageSearch, MessageSquareText, Menu, X, Box, Send, Bike, Warehouse, LogOut, User as UserIcon } from 'lucide-react';
+import { CustomerOrdersView } from './components/CustomerOrdersView';
+import { LayoutDashboard, PackageSearch, MessageSquareText, Menu, X, Box, Send, Bike, Warehouse, LogOut, User as UserIcon, ListOrdered } from 'lucide-react';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [view, setView] = useState<ViewState>('TRACKING'); 
+  const [view, setView] = useState<ViewState>('TRACKING');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Handle Login
@@ -54,7 +55,9 @@ const App: React.FC = () => {
       case 'AI_ASSISTANT': return <AssistantView />;
       case 'RIDER': return <RiderView currentUser={user} />;
       case 'HUB_MANAGER': return <HubView />;
+      case 'HUB_MANAGER': return <HubView />;
       case 'PROFILE': return <ProfileView currentUser={user} />;
+      case 'MY_ORDERS': return <CustomerOrdersView currentUser={user} />;
       default: return <TrackingView currentUser={user} />;
     }
   };
@@ -70,7 +73,7 @@ const App: React.FC = () => {
 
   const NavItem = ({ id, icon: Icon, label, roles, strict = false }: { id: ViewState, icon: any, label: string, roles: UserRole[], strict?: boolean }) => {
     if (!hasAccess(roles, strict)) return null;
-    
+
     return (
       <button
         onClick={() => {
@@ -79,8 +82,8 @@ const App: React.FC = () => {
         }}
         className={`
           w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium duration-200
-          ${view === id 
-            ? 'bg-indigo-600/90 text-white shadow-lg shadow-indigo-200 backdrop-blur-sm' 
+          ${view === id
+            ? 'bg-indigo-600/90 text-white shadow-lg shadow-indigo-200 backdrop-blur-sm'
             : 'text-slate-500 hover:bg-white/50 hover:text-indigo-600'}
         `}
       >
@@ -102,12 +105,12 @@ const App: React.FC = () => {
         </div>
 
         {/* User Profile Snippet */}
-        <div 
+        <div
           onClick={() => setView('PROFILE')}
           className="mb-6 p-4 bg-white/50 rounded-2xl border border-white/60 flex items-center gap-3 shadow-sm cursor-pointer hover:bg-white/80 transition-all hover:scale-[1.02]"
         >
           <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold ring-2 ring-white overflow-hidden">
-             {user.avatarUrl ? <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" /> : user.name.charAt(0)}
+            {user.avatarUrl ? <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" /> : user.name.charAt(0)}
           </div>
           <div className="flex-1 overflow-hidden">
             <p className="text-sm font-bold text-slate-800 truncate">{user.name}</p>
@@ -118,20 +121,21 @@ const App: React.FC = () => {
         <nav className="space-y-2 flex-1 overflow-y-auto pr-1 custom-scrollbar">
           {/* strict={true} prevents ADMIN from seeing this item */}
           <NavItem id="NEW_SHIPMENT" icon={Send} label="Send Package" roles={['CUSTOMER']} strict={true} />
+          <NavItem id="MY_ORDERS" icon={ListOrdered} label="My Orders" roles={['CUSTOMER']} strict={true} />
           <NavItem id="TRACKING" icon={PackageSearch} label="Track Package" roles={['CUSTOMER', 'ADMIN', 'HUB_MANAGER', 'HUB_STAFF', 'RIDER']} />
           <NavItem id="AI_ASSISTANT" icon={MessageSquareText} label="Smart Assistant" roles={['CUSTOMER']} />
-          
+
           <NavItem id="RIDER" icon={Bike} label="Rider App" roles={['RIDER']} />
-          
+
           <div className="pt-4 pb-2">
-             {hasAccess(['ADMIN', 'HUB_MANAGER']) && <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Management</p>}
-             <NavItem id="DASHBOARD" icon={LayoutDashboard} label="Admin Dashboard" roles={['ADMIN', 'FINANCE', 'SUPPORT']} />
-             <NavItem id="HUB_MANAGER" icon={Warehouse} label="Hub Manager" roles={['ADMIN', 'HUB_MANAGER', 'HUB_STAFF']} />
+            {hasAccess(['ADMIN', 'HUB_MANAGER']) && <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Management</p>}
+            <NavItem id="DASHBOARD" icon={LayoutDashboard} label="Admin Dashboard" roles={['ADMIN', 'FINANCE', 'SUPPORT']} />
+            <NavItem id="HUB_MANAGER" icon={Warehouse} label="Hub Manager" roles={['ADMIN', 'HUB_MANAGER', 'HUB_STAFF']} />
           </div>
         </nav>
 
         <div className="border-t border-slate-200/60 pt-4 mt-2">
-          <button 
+          <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors font-medium"
           >
@@ -157,28 +161,29 @@ const App: React.FC = () => {
       {/* Mobile Menu Overlay - Glass Effect */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 bg-white/90 backdrop-blur-xl z-40 pt-20 px-6 lg:hidden flex flex-col animate-in slide-in-from-top-10 duration-200">
-          <div 
-             onClick={() => { setView('PROFILE'); setIsMobileMenuOpen(false); }}
-             className="flex items-center gap-3 mb-6 p-4 bg-white/50 border border-white/60 rounded-2xl shadow-sm cursor-pointer"
+          <div
+            onClick={() => { setView('PROFILE'); setIsMobileMenuOpen(false); }}
+            className="flex items-center gap-3 mb-6 p-4 bg-white/50 border border-white/60 rounded-2xl shadow-sm cursor-pointer"
           >
-             <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold ring-2 ring-white overflow-hidden">
-               {user.avatarUrl ? <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" /> : user.name.charAt(0)}
-             </div>
-             <div>
-               <p className="font-bold text-slate-800">{user.name}</p>
-               <p className="text-xs text-slate-500 capitalize">{user.role.replace('_', ' ').toLowerCase()}</p>
-             </div>
+            <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold ring-2 ring-white overflow-hidden">
+              {user.avatarUrl ? <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" /> : user.name.charAt(0)}
+            </div>
+            <div>
+              <p className="font-bold text-slate-800">{user.name}</p>
+              <p className="text-xs text-slate-500 capitalize">{user.role.replace('_', ' ').toLowerCase()}</p>
+            </div>
           </div>
 
           <nav className="space-y-3 flex-1">
-             <NavItem id="NEW_SHIPMENT" icon={Send} label="Send Package" roles={['CUSTOMER']} strict={true} />
-             <NavItem id="TRACKING" icon={PackageSearch} label="Track Package" roles={['CUSTOMER', 'ADMIN', 'RIDER', 'HUB_MANAGER']} />
-             <NavItem id="RIDER" icon={Bike} label="Rider App" roles={['RIDER']} />
-             <NavItem id="DASHBOARD" icon={LayoutDashboard} label="Admin Dashboard" roles={['ADMIN']} />
-             <NavItem id="HUB_MANAGER" icon={Warehouse} label="Hub Manager" roles={['ADMIN', 'HUB_MANAGER']} />
-             <NavItem id="AI_ASSISTANT" icon={MessageSquareText} label="Smart Assistant" roles={['CUSTOMER']} />
+            <NavItem id="NEW_SHIPMENT" icon={Send} label="Send Package" roles={['CUSTOMER']} strict={true} />
+            <NavItem id="MY_ORDERS" icon={ListOrdered} label="My Orders" roles={['CUSTOMER']} strict={true} />
+            <NavItem id="TRACKING" icon={PackageSearch} label="Track Package" roles={['CUSTOMER', 'ADMIN', 'RIDER', 'HUB_MANAGER']} />
+            <NavItem id="RIDER" icon={Bike} label="Rider App" roles={['RIDER']} />
+            <NavItem id="DASHBOARD" icon={LayoutDashboard} label="Admin Dashboard" roles={['ADMIN']} />
+            <NavItem id="HUB_MANAGER" icon={Warehouse} label="Hub Manager" roles={['ADMIN', 'HUB_MANAGER']} />
+            <NavItem id="AI_ASSISTANT" icon={MessageSquareText} label="Smart Assistant" roles={['CUSTOMER']} />
           </nav>
-          
+
           <div className="py-6 border-t border-slate-200">
             <button onClick={handleLogout} className="flex items-center gap-3 text-red-600 font-medium">
               <LogOut size={20} /> Sign Out
