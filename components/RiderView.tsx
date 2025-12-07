@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { RiderTask, RiderTaskStatus, RiderEarnings, User } from '../types';
+import { RiderTask, RiderTaskStatus, RiderEarnings, User, PackageAssignment, Shipment } from '../types';
 import { mockDataService } from '../services/mockDataService';
-import { MapPin, Navigation, Package, Camera, CheckCircle, XCircle, DollarSign, Calendar, ChevronRight, Upload, Truck, User as UserIcon, Lock } from 'lucide-react';
+import { MapPin, Navigation, Package, Camera, CheckCircle, XCircle, DollarSign, Calendar, ChevronRight, Upload, Truck, User as UserIcon, Lock, QrCode, Scan } from 'lucide-react';
 
 interface RiderViewProps {
   currentUser: User | null;
@@ -15,12 +15,19 @@ const MOCK_EARNINGS: RiderEarnings = {
 };
 
 export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
-  const [activeTab, setActiveTab] = useState<'TASKS' | 'EARNINGS'>('TASKS');
+  const [activeTab, setActiveTab] = useState<'TASKS' | 'PACKAGES' | 'EARNINGS'>('TASKS');
   const [tasks, setTasks] = useState<RiderTask[]>([]);
   const [selectedTask, setSelectedTask] = useState<RiderTask | null>(null);
   const [isPodModalOpen, setIsPodModalOpen] = useState(false);
   const [podData, setPodData] = useState({ photoDesc: '', signature: '' });
   const [verifying, setVerifying] = useState(false);
+
+  // Package tracking state
+  const [packages, setPackages] = useState<PackageAssignment[]>([]);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [selectedPackage, setSelectedPackage] = useState<PackageAssignment | null>(null);
+  const [isScanModalOpen, setIsScanModalOpen] = useState(false);
+  const [scanCode, setScanCode] = useState('');
 
   // Check if current user is actually a RIDER
   const isRider = currentUser?.role === 'RIDER';
@@ -30,8 +37,21 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
       const data = await mockDataService.getRiderTasks();
       setTasks(data);
     };
+
+    const loadPackages = async () => {
+      if (currentUser?.id) {
+        const packageData = await mockDataService.getPackageAssignments(currentUser.id);
+        setPackages(packageData);
+
+        // Load shipment details for each package
+        const shipmentData = await mockDataService.getShipments();
+        setShipments(shipmentData);
+      }
+    };
+
     loadTasks();
-  }, []);
+    loadPackages();
+  }, [currentUser]);
 
   // Filter tasks for the list view
   const pendingTasks = tasks.filter(t => t.status === 'PENDING');
@@ -106,6 +126,12 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
             Tasks
           </button>
           <button
+            onClick={() => setActiveTab('PACKAGES')}
+            className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'PACKAGES' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+          >
+            Packages
+          </button>
+          <button
             onClick={() => setActiveTab('EARNINGS')}
             className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'EARNINGS' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
           >
@@ -158,6 +184,50 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
               )}
             </div>
 
+          </div>
+        ) : activeTab === 'PACKAGES' ? (
+          <div className="p-4 space-y-6">
+            {!isRider && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl text-sm mb-4 flex items-center gap-2">
+                <Lock size={16} />
+                <span className="font-medium">Admin View Mode: Package actions are disabled.</span>
+              </div>
+            )}
+
+            {/* Scan Package Button */}
+            {isRider && (
+              <button
+                onClick={() => setIsScanModalOpen(true)}
+                className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 hover:shadow-xl transition-all"
+              >
+                <Scan size={20} />
+                Scan Package
+              </button>
+            )}
+
+            {/* Assigned Packages */}
+            <div>
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 ml-1">My Packages</h3>
+              {packages.length > 0 ? (
+                packages.map(pkg => {
+                  const shipment = shipments.find(s => s.id === pkg.shipmentId);
+                  return (
+                    <PackageCard
+                      key={pkg.id}
+                      packageAssignment={pkg}
+                      shipment={shipment}
+                      onClick={() => setSelectedPackage(pkg)}
+                    />
+                  );
+                })
+              ) : (
+                <div className="bg-white/70 backdrop-blur-md p-8 rounded-2xl border border-white/60 text-center">
+                  <Package className="mx-auto text-slate-300 mb-3" size={48} />
+                  <p className="text-slate-500 font-medium">No packages assigned</p>
+                  <p className="text-sm text-slate-400 mt-1">Packages will appear here when assigned to you</p>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <EarningsView stats={MOCK_EARNINGS} />
@@ -337,6 +407,57 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
         </div>
       )}
 
+      {/* Package Scan Modal */}
+      {isScanModalOpen && (
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm z-40 flex items-end">
+          <div className="bg-white w-full rounded-t-3xl p-6 animate-in slide-in-from-bottom duration-300 shadow-2xl">
+            <h3 className="text-xl font-bold text-slate-800 mb-4">Scan Package</h3>
+
+            <div className="space-y-4 mb-6">
+              <div className="bg-slate-100 rounded-xl p-8 flex flex-col items-center justify-center">
+                <QrCode size={120} className="text-slate-400 mb-4" />
+                <p className="text-sm text-slate-500 text-center">Position QR code within frame</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Or Enter Tracking ID</label>
+                <input
+                  type="text"
+                  placeholder="TRK-XXXXXX"
+                  className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  value={scanCode}
+                  onChange={(e) => setScanCode(e.target.value.toUpperCase())}
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                // Simulate package scan
+                if (scanCode) {
+                  alert(`Package ${scanCode} scanned successfully!`);
+                  setScanCode('');
+                  setIsScanModalOpen(false);
+                }
+              }}
+              disabled={!scanCode}
+              className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Confirm Scan
+            </button>
+            <button
+              onClick={() => {
+                setScanCode('');
+                setIsScanModalOpen(false);
+              }}
+              className="w-full mt-3 py-3 text-slate-500 font-medium"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
@@ -423,3 +544,59 @@ const EarningsView = ({ stats }: { stats: RiderEarnings }) => (
     </div>
   </div>
 );
+
+const PackageCard = ({ packageAssignment, shipment, onClick }: {
+  packageAssignment: PackageAssignment,
+  shipment?: Shipment,
+  onClick: () => void
+}) => {
+  const getStatusColor = (status: PackageAssignment['status']) => {
+    switch (status) {
+      case 'ASSIGNED': return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'PICKED_UP': return 'bg-purple-100 text-purple-700 border-purple-200';
+      case 'IN_TRANSIT': return 'bg-indigo-100 text-indigo-700 border-indigo-200';
+      case 'DELIVERED': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      default: return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+  };
+
+  return (
+    <div
+      onClick={onClick}
+      className="bg-white/80 backdrop-blur-sm p-4 rounded-xl border border-white/60 mb-3 cursor-pointer shadow-sm transition-all active:scale-[0.98] hover:shadow-md border-l-4 border-l-indigo-500"
+    >
+      <div className="flex justify-between items-start mb-3">
+        <div>
+          <p className="text-xs text-slate-400 font-medium mb-1">Tracking ID</p>
+          <p className="font-bold text-slate-800 font-mono text-sm">{packageAssignment.shipmentId}</p>
+        </div>
+        <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border ${getStatusColor(packageAssignment.status)}`}>
+          {packageAssignment.status.replace('_', ' ')}
+        </span>
+      </div>
+
+      {shipment && (
+        <>
+          <div className="flex items-start gap-2 mb-2">
+            <MapPin className="text-indigo-600 mt-0.5 flex-shrink-0" size={16} />
+            <div>
+              <p className="text-sm font-semibold text-slate-800">{shipment.recipientName}</p>
+              <p className="text-xs text-slate-500">{shipment.destination}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100">
+            <span className="flex items-center gap-1">
+              <Calendar size={12} />
+              ETA: {packageAssignment.estimatedDelivery}
+            </span>
+            <span className="flex items-center gap-1">
+              <Truck size={12} />
+              Vehicle: {packageAssignment.vehicleId}
+            </span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};

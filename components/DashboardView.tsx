@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { DashboardStats, User, PricingConfig, Vehicle, Shipment, ShipmentStatus } from '../types';
+import { DashboardStats, User, PricingConfig, Shipment, ShipmentStatus } from '../types';
 import { generateLogisticsReport, optimizePricingRules, generateNotificationTemplate } from '../services/geminiService';
 import { mockDataService } from '../services/mockDataService';
-import { TrendingUp, Package, AlertTriangle, CheckCircle, Sparkles, Loader2, Users, CreditCard, Bell, Search, Sliders, DollarSign, FileText, Server, Globe, Shield, Database, Activity, Wifi, Cpu, MessageSquare, Map as MapIcon, Truck, Wrench, ArrowRight, Filter } from 'lucide-react';
+import { TrendingUp, Package, AlertTriangle, CheckCircle, Sparkles, Loader2, Users, CreditCard, Bell, Search, Sliders, DollarSign, FileText, Server, Globe, Shield, Database, Activity, Wifi, Cpu, MessageSquare, ArrowRight, Filter } from 'lucide-react';
 import { ShipmentDetailsModal } from './ShipmentDetailsModal';
 
 const CHART_DATA = [
@@ -24,7 +24,7 @@ const INITIAL_PRICING: PricingConfig = {
   peakHourSurcharge: 1.2
 };
 
-type AdminTab = 'OVERVIEW' | 'USERS' | 'ORDERS' | 'FLEET' | 'PRICING' | 'FINANCE' | 'NOTIFICATIONS' | 'SYSTEM';
+type AdminTab = 'OVERVIEW' | 'USERS' | 'ORDERS' | 'NOTIFICATIONS' | 'SYSTEM';
 
 export const DashboardView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AdminTab>('OVERVIEW');
@@ -33,15 +33,10 @@ export const DashboardView: React.FC = () => {
   // Data States
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [shipments, setShipments] = useState<Shipment[]>([]);
 
   // -- OVERVIEW STATES --
   const [overviewReport, setOverviewReport] = useState<string | null>(null);
-
-  // -- PRICING STATES --
-  const [pricing, setPricing] = useState<PricingConfig>(INITIAL_PRICING);
-  const [pricingSuggestion, setPricingSuggestion] = useState<string | null>(null);
 
   // -- NOTIFICATION STATES --
   const [notifScenario, setNotifScenario] = useState('');
@@ -57,7 +52,6 @@ export const DashboardView: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [editUserForm, setEditUserForm] = useState({ name: '', email: '', phone: '', role: 'CUSTOMER', status: 'ACTIVE' });
   const [newUserForm, setNewUserForm] = useState({ name: '', email: '', phone: '', role: 'CUSTOMER' });
-  const [newVehicleForm, setNewVehicleForm] = useState({ plateNumber: '', type: 'VAN', capacity: '' });
   const [showViewShipmentModal, setShowViewShipmentModal] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
 
@@ -68,9 +62,6 @@ export const DashboardView: React.FC = () => {
 
       const userList = await mockDataService.getUsers();
       setUsers(userList);
-
-      const vehicleList = await mockDataService.getVehicles();
-      setVehicles(vehicleList);
 
       const shipmentList = await mockDataService.getShipments();
       setShipments(shipmentList);
@@ -87,12 +78,7 @@ export const DashboardView: React.FC = () => {
     setLoadingAi(false);
   };
 
-  const handleOptimizePricing = async () => {
-    setLoadingAi(true);
-    const suggestion = await optimizePricingRules(pricing);
-    setPricingSuggestion(suggestion);
-    setLoadingAi(false);
-  };
+
 
   const handleGenerateTemplate = async () => {
     if (!notifScenario) return;
@@ -131,25 +117,6 @@ export const DashboardView: React.FC = () => {
     setNewUserForm({ name: '', email: '', phone: '', role: 'CUSTOMER' });
   };
 
-  const handleAddVehicle = () => {
-    setShowAddVehicleModal(true);
-  };
-
-  const saveNewVehicle = () => {
-    console.log('Creating new vehicle:', newVehicleForm);
-    // Add vehicle to state
-    const newVehicle: Vehicle = {
-      id: `VEH-${Date.now()}`,
-      plateNumber: newVehicleForm.plateNumber,
-      type: newVehicleForm.type as any,
-      capacity: newVehicleForm.capacity,
-      status: 'AVAILABLE',
-      lastMaintenance: new Date().toLocaleDateString()
-    };
-    setVehicles([...vehicles, newVehicle]);
-    setShowAddVehicleModal(false);
-    setNewVehicleForm({ plateNumber: '', type: 'VAN', capacity: '' });
-  };
 
   const handleViewUser = (user: User) => {
     setSelectedUser(user);
@@ -405,142 +372,8 @@ export const DashboardView: React.FC = () => {
     );
   };
 
-  const renderFleetManagement = () => (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">Fleet Management</h2>
-          <p className="text-slate-500">Vehicle status and maintenance tracking.</p>
-        </div>
-        <button
-          onClick={handleAddVehicle}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-medium shadow-md hover:bg-indigo-700"
-        >
-          + Add Vehicle
-        </button>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {vehicles.map(vehicle => (
-          <div key={vehicle.id} className="bg-white/80 backdrop-blur-xl p-6 rounded-2xl border border-white/60 shadow-sm hover:shadow-lg transition-all group">
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-3 bg-slate-100 rounded-xl group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
-                {vehicle.type === 'BIKE' ? <Users size={24} /> : <Truck size={24} />}
-              </div>
-              <span className={`px-2 py-1 rounded-md text-xs font-bold
-                 ${vehicle.status === 'AVAILABLE' ? 'bg-emerald-100 text-emerald-700' :
-                  vehicle.status === 'IN_USE' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}
-               `}>
-                {vehicle.status.replace('_', ' ')}
-              </span>
-            </div>
 
-            <h3 className="text-lg font-bold text-slate-800 mb-1">{vehicle.plateNumber}</h3>
-            <p className="text-sm text-slate-500 mb-4 capitalize">{vehicle.type.toLowerCase()} • {vehicle.capacity}</p>
-
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-              <span className="flex items-center gap-1"><Wrench size={12} /> Last Service</span>
-              <span>{vehicle.lastMaintenance}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  const renderPricingEngine = () => (
-    <div className="max-w-4xl space-y-6 animate-fade-in">
-      <div className="flex justify-between items-end">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">Smart Pricing Engine</h2>
-          <p className="text-slate-500">Configure base rates and surcharges.</p>
-        </div>
-        <button
-          onClick={handleOptimizePricing}
-          disabled={loadingAi}
-          className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white px-5 py-2 rounded-xl font-bold hover:shadow-lg transition-all flex items-center gap-2 disabled:opacity-70"
-        >
-          {loadingAi ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
-          AI Optimize
-        </button>
-      </div>
-
-      {pricingSuggestion && (
-        <div className="bg-violet-50/90 backdrop-blur-md border border-violet-100 p-6 rounded-2xl flex items-start gap-4 shadow-sm animate-in slide-in-from-top-4">
-          <div className="p-2 bg-violet-100 rounded-full text-violet-600"><Sparkles size={20} /></div>
-          <div>
-            <h4 className="font-bold text-violet-900 mb-1">Recommendation</h4>
-            <p className="text-slate-700 text-sm leading-relaxed">{pricingSuggestion}</p>
-          </div>
-        </div>
-      )}
-
-      <div className="bg-white/80 backdrop-blur-xl p-8 rounded-2xl border border-white/60 shadow-lg grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
-          <label className="block text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
-            <DollarSign size={16} /> Base Configuration
-          </label>
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs text-slate-500 font-medium">Base Rate ($)</label>
-              <input type="number" value={pricing.baseRate} onChange={e => setPricing({ ...pricing, baseRate: Number(e.target.value) })} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg" />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500 font-medium">Per Km Rate ($)</label>
-              <input type="number" value={pricing.perKm} onChange={e => setPricing({ ...pricing, perKm: Number(e.target.value) })} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg" />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500 font-medium">Per Kg Rate ($)</label>
-              <input type="number" value={pricing.perKg} onChange={e => setPricing({ ...pricing, perKg: Number(e.target.value) })} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg" />
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
-            <Sliders size={16} /> Multipliers
-          </label>
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs text-slate-500 font-medium">Express Service (x)</label>
-              <input type="number" step="0.1" value={pricing.serviceMultipliers.express} onChange={e => setPricing({ ...pricing, serviceMultipliers: { ...pricing.serviceMultipliers, express: Number(e.target.value) } })} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg" />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500 font-medium">Same Day Service (x)</label>
-              <input type="number" step="0.1" value={pricing.serviceMultipliers.sameDay} onChange={e => setPricing({ ...pricing, serviceMultipliers: { ...pricing.serviceMultipliers, sameDay: Number(e.target.value) } })} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg" />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500 font-medium">Peak Hour Surcharge (x)</label>
-              <input type="number" step="0.1" value={pricing.peakHourSurcharge} onChange={e => setPricing({ ...pricing, peakHourSurcharge: Number(e.target.value) })} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg" />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderFinance = () => (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">Financial Reports</h2>
-          <p className="text-slate-500">Revenue streams and profit analysis.</p>
-        </div>
-      </div>
-      <div className="h-96 bg-white/80 backdrop-blur-xl p-6 rounded-2xl border border-white/60 shadow-lg">
-        <h3 className="font-bold text-slate-800 mb-6">Revenue Trend (7 Days)</h3>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={CHART_DATA}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-            <XAxis dataKey="name" axisLine={false} tickLine={false} />
-            <YAxis axisLine={false} tickLine={false} />
-            <Tooltip />
-            <Line type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 8 }} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
 
   const renderNotifications = () => (
     <div className="max-w-2xl space-y-6 animate-fade-in">
@@ -607,9 +440,6 @@ export const DashboardView: React.FC = () => {
       case 'OVERVIEW': return renderOverview();
       case 'USERS': return renderUserManagement();
       case 'ORDERS': return renderOrderManagement();
-      case 'FLEET': return renderFleetManagement();
-      case 'PRICING': return renderPricingEngine();
-      case 'FINANCE': return renderFinance();
       case 'NOTIFICATIONS': return renderNotifications();
       case 'SYSTEM': return renderSystemArchitecture();
       default: return renderOverview();
@@ -624,9 +454,6 @@ export const DashboardView: React.FC = () => {
         <div className="h-px bg-slate-200/50 my-2"></div>
         <DashboardTab id="USERS" label="User Management" icon={Users} active={activeTab} onClick={setActiveTab} />
         <DashboardTab id="ORDERS" label="Shipments & Orders" icon={FileText} active={activeTab} onClick={setActiveTab} />
-        <DashboardTab id="FLEET" label="Fleet Management" icon={Truck} active={activeTab} onClick={setActiveTab} />
-        <DashboardTab id="PRICING" label="Smart Pricing" icon={DollarSign} active={activeTab} onClick={setActiveTab} />
-        <DashboardTab id="FINANCE" label="Financial Reports" icon={CreditCard} active={activeTab} onClick={setActiveTab} />
         <DashboardTab id="NOTIFICATIONS" label="Notifications AI" icon={Bell} active={activeTab} onClick={setActiveTab} />
         <div className="h-px bg-slate-200/50 my-2"></div>
         <DashboardTab id="SYSTEM" label="System Status" icon={Server} active={activeTab} onClick={setActiveTab} />
@@ -714,71 +541,6 @@ export const DashboardView: React.FC = () => {
         </div>
       )}
 
-      {/* Add Vehicle Modal */}
-      {showAddVehicleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 animate-in slide-in-from-bottom-4">
-            <h3 className="text-xl font-bold text-slate-800 mb-4">Add New Vehicle</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Plate Number</label>
-                <input
-                  type="text"
-                  value={newVehicleForm.plateNumber}
-                  onChange={(e) => setNewVehicleForm({ ...newVehicleForm, plateNumber: e.target.value })}
-                  placeholder="ABC-1234"
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none uppercase"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Vehicle Type</label>
-                <select
-                  value={newVehicleForm.type}
-                  onChange={(e) => setNewVehicleForm({ ...newVehicleForm, type: e.target.value })}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                >
-                  <option value="BIKE">Bike</option>
-                  <option value="VAN">Van</option>
-                  <option value="TRUCK">Truck</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Capacity</label>
-                <input
-                  type="text"
-                  value={newVehicleForm.capacity}
-                  onChange={(e) => setNewVehicleForm({ ...newVehicleForm, capacity: e.target.value })}
-                  placeholder="e.g., 500kg or 20 packages"
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-              </div>
-              <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
-                <p className="text-xs text-amber-700">
-                  <strong>Note:</strong> Vehicle will be marked as AVAILABLE and ready for assignment.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowAddVehicleModal(false);
-                  setNewVehicleForm({ plateNumber: '', type: 'VAN', capacity: '' });
-                }}
-                className="flex-1 py-2.5 border border-slate-200 rounded-lg text-slate-600 font-medium hover:bg-slate-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveNewVehicle}
-                disabled={!newVehicleForm.plateNumber || !newVehicleForm.capacity}
-                className="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Add Vehicle
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Edit User Modal */}
       {showEditUserModal && selectedUser && (

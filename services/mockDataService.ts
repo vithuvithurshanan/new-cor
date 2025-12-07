@@ -1,4 +1,4 @@
-import { Shipment, ShipmentStatus, RiderTask, User, Hub, Vehicle, DashboardStats } from '../types';
+import { Shipment, ShipmentStatus, RiderTask, User, Hub, Vehicle, DashboardStats, FleetStats, PackageAssignment, VehicleAssignment } from '../types';
 
 // Mock Data Store
 class MockDataService {
@@ -82,6 +82,37 @@ class MockDataService {
       manager: 'Sarah Connor',
       capacity: 5000,
       currentLoad: 2100
+    }
+  ];
+
+  // Fleet Management Data
+  private packageAssignments: PackageAssignment[] = [
+    {
+      id: 'PA-001',
+      shipmentId: 'TRK-885210',
+      riderId: 'U2',
+      vehicleId: 'V1',
+      assignedAt: '2023-10-23 14:00',
+      status: 'IN_TRANSIT',
+      estimatedDelivery: '2023-10-25'
+    },
+    {
+      id: 'PA-002',
+      shipmentId: 'TRK-774321',
+      riderId: 'U2',
+      vehicleId: 'V1',
+      assignedAt: '2023-10-21 09:00',
+      status: 'ASSIGNED',
+      estimatedDelivery: '2023-10-24'
+    }
+  ];
+
+  private vehicleAssignments: VehicleAssignment[] = [
+    {
+      vehicleId: 'V1',
+      riderId: 'U2',
+      assignedAt: '2023-10-23 08:00',
+      status: 'ACTIVE'
     }
   ];
 
@@ -199,6 +230,83 @@ class MockDataService {
 
   getVehicles(): Promise<Vehicle[]> {
     return Promise.resolve([...this.vehicles]);
+  }
+
+  // Fleet Management Methods
+  getFleetStats(): Promise<FleetStats> {
+    const totalVehicles = this.vehicles.length;
+    const activeVehicles = this.vehicles.filter(v => v.status === 'IN_USE').length;
+    const availableVehicles = this.vehicles.filter(v => v.status === 'AVAILABLE').length;
+    const inMaintenance = this.vehicles.filter(v => v.status === 'MAINTENANCE').length;
+
+    return Promise.resolve({
+      totalVehicles,
+      activeVehicles,
+      availableVehicles,
+      inMaintenance,
+      totalDistance: 342.5, // Mock data
+      fuelEfficiency: 12.8 // Mock data
+    });
+  }
+
+  getPackageAssignments(riderId?: string): Promise<PackageAssignment[]> {
+    if (riderId) {
+      return Promise.resolve(this.packageAssignments.filter(pa => pa.riderId === riderId));
+    }
+    return Promise.resolve([...this.packageAssignments]);
+  }
+
+  assignPackageToRider(shipmentId: string, riderId: string, vehicleId: string): Promise<PackageAssignment> {
+    const newAssignment: PackageAssignment = {
+      id: `PA-${Math.floor(Math.random() * 10000)}`,
+      shipmentId,
+      riderId,
+      vehicleId,
+      assignedAt: new Date().toLocaleString(),
+      status: 'ASSIGNED',
+      estimatedDelivery: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toLocaleDateString()
+    };
+    this.packageAssignments.push(newAssignment);
+    return Promise.resolve(newAssignment);
+  }
+
+  assignVehicleToRider(vehicleId: string, riderId: string): Promise<void> {
+    // Update vehicle status
+    const vehicle = this.vehicles.find(v => v.id === vehicleId);
+    if (vehicle) {
+      vehicle.status = 'IN_USE';
+      vehicle.currentDriverId = riderId;
+    }
+
+    // Create assignment record
+    const newAssignment: VehicleAssignment = {
+      vehicleId,
+      riderId,
+      assignedAt: new Date().toLocaleString(),
+      status: 'ACTIVE'
+    };
+    this.vehicleAssignments.push(newAssignment);
+    return Promise.resolve();
+  }
+
+  updateVehicleStatus(vehicleId: string, status: Vehicle['status']): Promise<void> {
+    const vehicle = this.vehicles.find(v => v.id === vehicleId);
+    if (vehicle) {
+      vehicle.status = status;
+      if (status === 'AVAILABLE') {
+        vehicle.currentDriverId = undefined;
+      }
+    }
+    return Promise.resolve();
+  }
+
+  addVehicle(vehicle: Omit<Vehicle, 'id'>): Promise<Vehicle> {
+    const newVehicle: Vehicle = {
+      ...vehicle,
+      id: `V${this.vehicles.length + 1}`
+    };
+    this.vehicles.push(newVehicle);
+    return Promise.resolve(newVehicle);
   }
 }
 
