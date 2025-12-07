@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { ViewState, User, UserRole } from './types';
 import { DashboardView } from './components/DashboardView';
+import { AccountDashboardView } from './components/AccountDashboardView';
+import { FleetDashboardView } from './components/FleetDashboardView';
+import { VehicleDashboardView } from './components/VehicleDashboardView';
 import { TrackingView } from './components/TrackingView';
 import { AssistantView } from './components/AssistantView';
 import { PlaceOrderView } from './components/PlaceOrderView';
@@ -9,7 +12,7 @@ import { HubView } from './components/HubView';
 import { LoginView } from './components/LoginView';
 import { ProfileView } from './components/ProfileView';
 import { CustomerOrdersView } from './components/CustomerOrdersView';
-import { LayoutDashboard, PackageSearch, MessageSquareText, Menu, X, Box, Send, Bike, Warehouse, LogOut, User as UserIcon, ListOrdered } from 'lucide-react';
+import { LayoutDashboard, PackageSearch, MessageSquareText, Menu, X, Box, Send, Bike, Warehouse, LogOut, User as UserIcon, ListOrdered, Wallet, Truck } from 'lucide-react';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -50,11 +53,13 @@ const App: React.FC = () => {
   const renderView = () => {
     switch (view) {
       case 'DASHBOARD': return <DashboardView />;
+      case 'ACCOUNT_DASHBOARD': return <AccountDashboardView />;
+      case 'FLEET_DASHBOARD': return <FleetDashboardView currentUser={user} />;
+      case 'VEHICLE_DASHBOARD': return <VehicleDashboardView />;
       case 'TRACKING': return <TrackingView currentUser={user} />;
       case 'NEW_SHIPMENT': return <PlaceOrderView />;
       case 'AI_ASSISTANT': return <AssistantView />;
       case 'RIDER': return <RiderView currentUser={user} />;
-      case 'HUB_MANAGER': return <HubView />;
       case 'HUB_MANAGER': return <HubView />;
       case 'PROFILE': return <ProfileView currentUser={user} />;
       case 'MY_ORDERS': return <CustomerOrdersView currentUser={user} />;
@@ -130,6 +135,9 @@ const App: React.FC = () => {
           <div className="pt-4 pb-2">
             {hasAccess(['ADMIN', 'HUB_MANAGER']) && <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Management</p>}
             <NavItem id="DASHBOARD" icon={LayoutDashboard} label="Admin Dashboard" roles={['ADMIN', 'FINANCE', 'SUPPORT']} />
+            <NavItem id="FLEET_DASHBOARD" icon={Bike} label="Fleet Dashboard" roles={['ADMIN', 'HUB_MANAGER']} />
+            <NavItem id="VEHICLE_DASHBOARD" icon={Truck} label="Vehicle Dashboard" roles={['ADMIN', 'HUB_MANAGER']} />
+            <NavItem id="ACCOUNT_DASHBOARD" icon={Wallet} label="Account Dashboard" roles={['ADMIN', 'FINANCE']} />
             <NavItem id="HUB_MANAGER" icon={Warehouse} label="Hub Manager" roles={['ADMIN', 'HUB_MANAGER', 'HUB_STAFF']} />
           </div>
         </nav>
@@ -180,6 +188,9 @@ const App: React.FC = () => {
             <NavItem id="TRACKING" icon={PackageSearch} label="Track Package" roles={['CUSTOMER', 'ADMIN', 'RIDER', 'HUB_MANAGER']} />
             <NavItem id="RIDER" icon={Bike} label="Rider App" roles={['RIDER']} />
             <NavItem id="DASHBOARD" icon={LayoutDashboard} label="Admin Dashboard" roles={['ADMIN']} />
+            <NavItem id="FLEET_DASHBOARD" icon={Bike} label="Fleet Dashboard" roles={['ADMIN', 'HUB_MANAGER']} />
+            <NavItem id="VEHICLE_DASHBOARD" icon={Truck} label="Vehicle Dashboard" roles={['ADMIN', 'HUB_MANAGER']} />
+            <NavItem id="ACCOUNT_DASHBOARD" icon={Wallet} label="Account Dashboard" roles={['ADMIN', 'FINANCE']} />
             <NavItem id="HUB_MANAGER" icon={Warehouse} label="Hub Manager" roles={['ADMIN', 'HUB_MANAGER']} />
             <NavItem id="AI_ASSISTANT" icon={MessageSquareText} label="Smart Assistant" roles={['CUSTOMER']} />
           </nav>

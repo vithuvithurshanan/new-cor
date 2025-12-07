@@ -41,7 +41,7 @@ export interface DashboardStats {
   delayed: number;
 }
 
-export type ViewState = 'DASHBOARD' | 'TRACKING' | 'NEW_SHIPMENT' | 'AI_ASSISTANT' | 'RIDER' | 'HUB_MANAGER' | 'PROFILE' | 'MY_ORDERS';
+export type ViewState = 'DASHBOARD' | 'ACCOUNT_DASHBOARD' | 'FLEET_DASHBOARD' | 'VEHICLE_DASHBOARD' | 'TRACKING' | 'NEW_SHIPMENT' | 'AI_ASSISTANT' | 'RIDER' | 'HUB_MANAGER' | 'PROFILE' | 'MY_ORDERS';
 
 // Rider Module Types
 export type RiderTaskType = 'PICKUP' | 'DELIVERY';
@@ -57,6 +57,7 @@ export interface RiderTask {
   packageDetails: string;
   earnings: number;
   distance: string;
+  shipmentId?: string; // Link to shipment for package tracking
 }
 
 export interface RiderEarnings {
@@ -133,3 +134,31 @@ export interface HubManifest {
 }
 
 export type PaymentMethod = 'CREDIT_CARD' | 'WALLET' | 'COD';
+
+// Fleet Management Enhancement Types
+export interface FleetStats {
+  totalVehicles: number;
+  activeVehicles: number;
+  availableVehicles: number;
+  inMaintenance: number;
+  totalDistance: number; // km traveled today
+  fuelEfficiency: number; // avg km/L
+}
+
+export interface PackageAssignment {
+  id: string;
+  shipmentId: string;
+  riderId: string;
+  vehicleId: string;
+  assignedAt: string;
+  status: 'ASSIGNED' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED';
+  estimatedDelivery: string;
+  actualDelivery?: string;
+}
+
+export interface VehicleAssignment {
+  vehicleId: string;
+  riderId: string;
+  assignedAt: string;
+  status: 'ACTIVE' | 'COMPLETED';
+}
