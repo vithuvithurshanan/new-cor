@@ -1,0 +1,195 @@
+/* Enhanced CourierOS Styles */
+:root{
+  --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #ffffff 50%, #eef2ff 100%);
+  --sidebar-width: 320px;
+  --sidebar-collapsed-width: 80px;
+}
+
+html,body,#root{
+  height:100%;
+  margin:0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+body{
+  background: var(--bg-gradient);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+
+/* Enhanced Scrollbar */
+.custom-scrollbar::-webkit-scrollbar{
+  width:6px;
+  height:6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track{
+  background:transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb{
+  background:rgba(148, 163, 184, 0.3);
+  border-radius:999px;
+  transition: background 0.2s ease;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover{
+  background:rgba(148, 163, 184, 0.6);
+}
+
+/* Animations */
+@keyframes slideInFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInFromBottom {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes zoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-in {
+  animation-fill-mode: both;
+}
+
+.slide-in-from-top-2 {
+  animation: slideInFromTop 0.2s ease-out;
+}
+
+.slide-in-from-bottom-2 {
+  animation: slideInFromBottom 0.2s ease-out;
+}
+
+.slide-in-from-top-10 {
+  animation: slideInFromTop 0.3s ease-out;
+}
+
+.fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.zoom-in {
+  animation: zoomIn 0.2s ease-out;
+}
+
+/* Glass Effect Utilities */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.glass-dark {
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Text Utilities */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Focus States */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2;
+}
+
+/* Notification Badge */
+.notification-badge {
+  position: relative;
+}
+
+.notification-badge::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  background: #ef4444;
+  border-radius: 50%;
+  border: 2px solid white;
+}
+
+/* Sidebar Transitions */
+.sidebar-transition {
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Z-Index Layers */
+.z-sidebar { z-index: 10; }
+.z-header { z-index: 20; }
+.z-modal { z-index: 50; }
+.z-notification { z-index: 9999; }
+.z-notification-backdrop { z-index: 9998; }
+.z-tooltip { z-index: 10000; }
+
+/* Notification Specific */
+.notification-panel {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  position: relative;
+}
+
+.notification-portal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 99999;
+}
+
+.notification-portal > * {
+  pointer-events: auto;
+}
+
+/* Mobile Responsive */
+@media (max-width: 1024px) {
+  :root {
+    --sidebar-width: 100vw;
+  }
+}
+
+@media (max-width: 640px) {
+  .notification-panel {
+    width: calc(100vw - 2rem) !important;
+    right: 1rem !important;
+    left: auto !important;
+    transform: translateX(0) !important;
+  }
+}

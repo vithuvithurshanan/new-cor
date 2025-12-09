@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Truck, ArrowRight, ShieldCheck, Sparkles, AlertCircle, Info, CreditCard, Wallet, Banknote, Loader2, CheckCircle, User, MapPin, XCircle, Navigation } from 'lucide-react';
+import { Package, Truck, ArrowRight, ShieldCheck, Sparkles, AlertCircle, Info, CreditCard, Wallet, Banknote, Loader2, CheckCircle, User as UserIcon, MapPin, XCircle, Navigation } from 'lucide-react';
 import { getPackagingAdvice } from '../services/geminiService';
-import { mockDataService } from '../services/mockDataService';
-import { PaymentMethod, ShipmentStatus } from '../types';
+import { apiService } from '../services/apiService';
+import { PaymentMethod, ShipmentStatus, User, PAYMENT_METHODS, PAYMENT_STATUS } from '../types';
 import { Address, validateAddress, validateStreet, validateCity, validateState, validateZipCode, US_STATES, formatAddress } from '../utils/addressValidation';
 import { geocodeAddress, Coordinates } from '../utils/geocoding';
 import { calculateRouteDistance, formatDistance, RouteDistance } from '../utils/distanceCalculation';
 
-export const PlaceOrderView: React.FC = () => {
+export const PlaceOrderView: React.FC<{ currentUser?: User | null }> = ({ currentUser }) => {
+  const IS_DEV = import.meta.env.DEV || import.meta.env.VITE_ALLOW_EMPTY_ORDER === 'true';
   const [formData, setFormData] = useState({
     recipientName: '',
     pickupAddress: {
@@ -43,7 +44,7 @@ export const PlaceOrderView: React.FC = () => {
 
   // Payment States
   const [showPayment, setShowPayment] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CREDIT_CARD');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(PAYMENT_METHODS.CREDIT_CARD);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [createdShipmentId, setCreatedShipmentId] = useState('');
@@ -163,6 +164,12 @@ export const PlaceOrderView: React.FC = () => {
       'dropoff-zip': true,
     });
 
+    // If in dev/testing mode, allow proceeding to payment even if validation fails
+    if (IS_DEV) {
+      setShowPayment(true);
+      return;
+    }
+
     // Only proceed if both addresses are valid
     if (pickupValidation.isValid && dropoffValidation.isValid) {
       setShowPayment(true);
@@ -176,23 +183,75 @@ export const PlaceOrderView: React.FC = () => {
     setIsProcessingPayment(true);
 
     try {
-      // Create shipment in mock service
-      const newShipment = await mockDataService.createShipment({
+      // Simulate payment processing delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Create shipment data for Firebase
+      const shipmentData = {
+        trackingId: `TRK${Date.now()}`,
+        customerId: currentUser?.id || 'guest-user',
         recipientName: formData.recipientName,
-        destination: formatAddress(formData.dropoffAddress),
+        pickupAddress: formData.pickupAddress,
+        dropoffAddress: formData.dropoffAddress,
+        weight: formData.weight,
+        description: formData.description,
+        serviceType: formData.serviceType,
+        currentStatus: 'PLACED' as const,
+        paymentMethod: paymentMethod,
+        paymentStatus: (paymentMethod === PAYMENT_METHODS.COD ? PAYMENT_STATUS.PENDING : PAYMENT_STATUS.PAID) as typeof PAYMENT_STATUS[keyof typeof PAYMENT_STATUS],
+        price: quote.price,
+        distanceMiles: distanceInfo ? distanceInfo.totalMiles : 0,
         estimatedDelivery: quote.eta,
-      });
+        events: [
+          {
+            status: 'PLACED' as const,
+            timestamp: new Date().toISOString(),
+            description: 'Order placed successfully',
+            location: formData.pickupAddress.city + ', ' + formData.pickupAddress.state
+          }
+        ]
+      };
 
-      setCreatedShipmentId(newShipment.id);
-
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Try to add to Firebase, fallback to API service
+      try {
+        const { firebaseService } = await import('../services/firebaseService');
+        const shipmentId = await firebaseService.addShipment(shipmentData);
+        setCreatedShipmentId(shipmentData.trackingId);
+        console.log('✅ Order added to Firebase with ID:', shipmentId);
+      } catch (firebaseError) {
+        console.log('Firebase not available, using API service fallback');
+        // Fallback to existing API service
+        const newShipment = await apiService.createShipment({
+          recipientName: formData.recipientName,
+          pickupAddress: formData.pickupAddress,
+          dropoffAddress: formData.dropoffAddress,
+          weight: formData.weight,
+          description: formData.description,
+          serviceType: formData.serviceType,
+          paymentMethod: paymentMethod,
+          paymentStatus: (paymentMethod === PAYMENT_METHODS.COD ? PAYMENT_STATUS.PENDING : PAYMENT_STATUS.PAID) as typeof PAYMENT_STATUS[keyof typeof PAYMENT_STATUS],
+          price: quote.price,
+          distanceMiles: distanceInfo ? distanceInfo.totalMiles : 0,
+          estimatedDelivery: quote.eta
+        });
+        setCreatedShipmentId(newShipment.trackingId || newShipment.id);
+      }
 
       setIsProcessingPayment(false);
       setPaymentSuccess(true);
+
+      // Show success notification
+      if (window.Notification && Notification.permission === 'granted') {
+        new Notification('Payment Successful! 🎉', {
+          body: `Your order ${shipmentData.trackingId} has been placed successfully.`,
+          icon: '/favicon.ico'
+        });
+      }
+
     } catch (error) {
       console.error("Payment failed", error);
       setIsProcessingPayment(false);
+      alert("Payment failed. Please try again.");
     }
   };
 
@@ -235,7 +294,7 @@ export const PlaceOrderView: React.FC = () => {
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Recipient Name</label>
               <div className="relative">
-                <User className="absolute left-3 top-3 text-slate-400" size={18} />
+                <UserIcon className="absolute left-3 top-3 text-slate-400" size={18} />
                 <input
                   type="text"
                   required
@@ -260,7 +319,7 @@ export const PlaceOrderView: React.FC = () => {
                 <div>
                   <input
                     type="text"
-                    required
+                    required={!IS_DEV}
                     placeholder="Street Address (e.g., 123 Main Street)"
                     className={`w-full p-3 bg-white/60 border rounded-xl focus:ring-2 outline-none transition-all ${touchedFields['pickup-street'] && pickupErrors.street
                       ? 'border-red-300 focus:ring-red-500'
@@ -296,7 +355,7 @@ export const PlaceOrderView: React.FC = () => {
                   <div>
                     <input
                       type="text"
-                      required
+                      required={!IS_DEV}
                       placeholder="City"
                       className={`w-full p-3 bg-white/60 border rounded-xl focus:ring-2 outline-none transition-all ${touchedFields['pickup-city'] && pickupErrors.city
                         ? 'border-red-300 focus:ring-red-500'
@@ -330,7 +389,7 @@ export const PlaceOrderView: React.FC = () => {
                   {/* State */}
                   <div>
                     <select
-                      required
+                      required={!IS_DEV}
                       className={`w-full p-3 bg-white/60 border rounded-xl focus:ring-2 outline-none transition-all ${touchedFields['pickup-state'] && pickupErrors.state
                         ? 'border-red-300 focus:ring-red-500'
                         : touchedFields['pickup-state'] && !pickupErrors.state && formData.pickupAddress.state
@@ -372,7 +431,7 @@ export const PlaceOrderView: React.FC = () => {
                 <div>
                   <input
                     type="text"
-                    required
+                    required={!IS_DEV}
                     placeholder="ZIP Code (e.g., 12345 or 12345-6789)"
                     className={`w-full p-3 bg-white/60 border rounded-xl focus:ring-2 outline-none transition-all ${touchedFields['pickup-zip'] && pickupErrors.zipCode
                       ? 'border-red-300 focus:ring-red-500'
@@ -415,7 +474,7 @@ export const PlaceOrderView: React.FC = () => {
                 <div>
                   <input
                     type="text"
-                    required
+                    required={!IS_DEV}
                     placeholder="Street Address (e.g., 456 Oak Avenue)"
                     className={`w-full p-3 bg-white/60 border rounded-xl focus:ring-2 outline-none transition-all ${touchedFields['dropoff-street'] && dropoffErrors.street
                       ? 'border-red-300 focus:ring-red-500'
@@ -451,7 +510,7 @@ export const PlaceOrderView: React.FC = () => {
                   <div>
                     <input
                       type="text"
-                      required
+                      required={!IS_DEV}
                       placeholder="City"
                       className={`w-full p-3 bg-white/60 border rounded-xl focus:ring-2 outline-none transition-all ${touchedFields['dropoff-city'] && dropoffErrors.city
                         ? 'border-red-300 focus:ring-red-500'
@@ -485,7 +544,7 @@ export const PlaceOrderView: React.FC = () => {
                   {/* State */}
                   <div>
                     <select
-                      required
+                      required={!IS_DEV}
                       className={`w-full p-3 bg-white/60 border rounded-xl focus:ring-2 outline-none transition-all ${touchedFields['dropoff-state'] && dropoffErrors.state
                         ? 'border-red-300 focus:ring-red-500'
                         : touchedFields['dropoff-state'] && !dropoffErrors.state && formData.dropoffAddress.state
@@ -527,7 +586,7 @@ export const PlaceOrderView: React.FC = () => {
                 <div>
                   <input
                     type="text"
-                    required
+                    required={!IS_DEV}
                     placeholder="ZIP Code (e.g., 12345 or 12345-6789)"
                     className={`w-full p-3 bg-white/60 border rounded-xl focus:ring-2 outline-none transition-all ${touchedFields['dropoff-zip'] && dropoffErrors.zipCode
                       ? 'border-red-300 focus:ring-red-500'
@@ -569,8 +628,12 @@ export const PlaceOrderView: React.FC = () => {
                   min="0.1"
                   step="0.1"
                   className="w-full p-3 bg-white/60 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                  value={formData.weight}
-                  onChange={e => setFormData({ ...formData, weight: parseFloat(e.target.value) })}
+                  value={typeof formData.weight === 'number' && !isNaN(formData.weight) ? formData.weight : 0}
+                  onChange={e => {
+                    const v = e.target.value;
+                    const parsed = v === '' ? 0 : parseFloat(v);
+                    setFormData({ ...formData, weight: isNaN(parsed) ? 0 : parsed });
+                  }}
                 />
               </div>
               <div>
@@ -761,29 +824,29 @@ export const PlaceOrderView: React.FC = () => {
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-3 gap-3">
                 <button
-                  onClick={() => setPaymentMethod('CREDIT_CARD')}
-                  className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${paymentMethod === 'CREDIT_CARD' ? 'border-indigo-600 bg-indigo-50/80 text-indigo-700' : 'border-slate-200 bg-white/50 text-slate-500 hover:border-slate-300'}`}
+                  onClick={() => setPaymentMethod(PAYMENT_METHODS.CREDIT_CARD)}
+                  className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${paymentMethod === PAYMENT_METHODS.CREDIT_CARD ? 'border-indigo-600 bg-indigo-50/80 text-indigo-700' : 'border-slate-200 bg-white/50 text-slate-500 hover:border-slate-300'}`}
                 >
                   <CreditCard size={24} />
                   <span className="text-xs font-bold">Card</span>
                 </button>
                 <button
-                  onClick={() => setPaymentMethod('WALLET')}
-                  className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${paymentMethod === 'WALLET' ? 'border-indigo-600 bg-indigo-50/80 text-indigo-700' : 'border-slate-200 bg-white/50 text-slate-500 hover:border-slate-300'}`}
+                  onClick={() => setPaymentMethod(PAYMENT_METHODS.WALLET)}
+                  className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${paymentMethod === PAYMENT_METHODS.WALLET ? 'border-indigo-600 bg-indigo-50/80 text-indigo-700' : 'border-slate-200 bg-white/50 text-slate-500 hover:border-slate-300'}`}
                 >
                   <Wallet size={24} />
                   <span className="text-xs font-bold">Wallet</span>
                 </button>
                 <button
-                  onClick={() => setPaymentMethod('COD')}
-                  className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${paymentMethod === 'COD' ? 'border-indigo-600 bg-indigo-50/80 text-indigo-700' : 'border-slate-200 bg-white/50 text-slate-500 hover:border-slate-300'}`}
+                  onClick={() => setPaymentMethod(PAYMENT_METHODS.COD)}
+                  className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${paymentMethod === PAYMENT_METHODS.COD ? 'border-indigo-600 bg-indigo-50/80 text-indigo-700' : 'border-slate-200 bg-white/50 text-slate-500 hover:border-slate-300'}`}
                 >
                   <Banknote size={24} />
                   <span className="text-xs font-bold">COD</span>
                 </button>
               </div>
 
-              {paymentMethod === 'CREDIT_CARD' && (
+              {paymentMethod === PAYMENT_METHODS.CREDIT_CARD && (
                 <div className="space-y-3 pt-2 animate-in fade-in">
                   <input type="text" placeholder="Card Number" className="w-full p-3 bg-white/60 border border-slate-300 rounded-lg" />
                   <div className="flex gap-3">
@@ -793,14 +856,14 @@ export const PlaceOrderView: React.FC = () => {
                 </div>
               )}
 
-              {paymentMethod === 'WALLET' && (
+              {paymentMethod === PAYMENT_METHODS.WALLET && (
                 <div className="bg-slate-50 p-4 rounded-xl text-center animate-in fade-in">
                   <p className="text-sm text-slate-600 mb-2">Available Balance</p>
                   <p className="text-2xl font-bold text-slate-800">$120.50</p>
                 </div>
               )}
 
-              {paymentMethod === 'COD' && (
+              {paymentMethod === PAYMENT_METHODS.COD && (
                 <div className="bg-amber-50 p-4 rounded-xl flex items-start gap-3 animate-in fade-in">
                   <AlertCircle className="text-amber-600 shrink-0" size={20} />
                   <p className="text-sm text-amber-800">Please have exact change ready for the rider upon pickup.</p>
@@ -810,7 +873,7 @@ export const PlaceOrderView: React.FC = () => {
 
             <div className="p-6 bg-slate-50/50 border-t border-slate-100 flex gap-3">
               <button
-                onClick={() => setShowPayment(false)}
+                onClick={() => setShowPayment(true)}
                 className="flex-1 py-3 text-slate-600 font-bold hover:bg-slate-200 rounded-xl transition-colors"
               >
                 Cancel

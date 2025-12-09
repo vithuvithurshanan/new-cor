@@ -25,7 +25,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ currentUser }) => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in pb-12">
+    <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-1 gap-8 pb-12 relative-7xl  animate-fade-in">
       {/* Header Profile Card */}
       <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 border border-white/60 shadow-xl flex flex-col md:flex-row items-center md:items-start gap-8 relative overflow-hidden">
         {/* Background Decoration */}

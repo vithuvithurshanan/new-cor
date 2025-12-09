@@ -1,12 +1,26 @@
-import { Shipment, ShipmentStatus, RiderTask, User, Hub, Vehicle, DashboardStats, FleetStats, PackageAssignment, VehicleAssignment } from '../types';
+import { Shipment, ShipmentStatus, RiderTask, User, Hub, Vehicle, DashboardStats, FleetStats, PackageAssignment, VehicleAssignment, PAYMENT_METHODS, PAYMENT_STATUS } from '../types';
+import { apiService } from './apiService';
+
+const USE_BACKEND = import.meta.env.VITE_USE_BACKEND === 'true';
 
 // Mock Data Store
 class MockDataService {
   private shipments: Shipment[] = [
     {
       id: 'TRK-885210',
+      trackingId: 'TRK-885210',
+      customerId: 'U1',
       recipientName: 'Sarah Jenkins',
       destination: '123 Maple Ave, Springfield',
+      pickupAddress: { street: '123 Origin St', city: 'Origin City', state: 'NY', zipCode: '10001' },
+      dropoffAddress: { street: '123 Maple Ave', city: 'Springfield', state: 'IL', zipCode: '62704' },
+      weight: 5.5,
+      serviceType: 'STANDARD',
+  paymentMethod: PAYMENT_METHODS.CREDIT_CARD,
+  paymentStatus: PAYMENT_STATUS.PAID as typeof PAYMENT_STATUS[keyof typeof PAYMENT_STATUS],
+      price: 25.00,
+      createdAt: '2023-10-23T09:00:00Z',
+      updatedAt: '2023-10-24T08:00:00Z',
       currentStatus: ShipmentStatus.IN_TRANSIT,
       estimatedDelivery: '2023-10-25',
       events: [
@@ -17,8 +31,19 @@ class MockDataService {
     },
     {
       id: 'TRK-992100',
+      trackingId: 'TRK-992100',
+      customerId: 'U1',
       recipientName: 'Tech Solutions Inc',
       destination: '45 Corporate Blvd, Metro City',
+      pickupAddress: { street: '456 Tech Park', city: 'Tech City', state: 'CA', zipCode: '94000' },
+      dropoffAddress: { street: '45 Corporate Blvd', city: 'Metro City', state: 'NY', zipCode: '10002' },
+      weight: 2.0,
+      serviceType: 'EXPRESS',
+  paymentMethod: PAYMENT_METHODS.WALLET,
+  paymentStatus: PAYMENT_STATUS.PAID as typeof PAYMENT_STATUS[keyof typeof PAYMENT_STATUS],
+      price: 45.50,
+      createdAt: '2023-10-20T10:00:00Z',
+      updatedAt: '2023-10-22T11:30:00Z',
       currentStatus: ShipmentStatus.DELIVERED,
       estimatedDelivery: '2023-10-22',
       events: [
@@ -28,8 +53,19 @@ class MockDataService {
     },
     {
       id: 'TRK-774321',
+      trackingId: 'TRK-774321',
+      customerId: 'U1',
       recipientName: 'John Doe',
       destination: '789 Oak St, Gotham',
+      pickupAddress: { street: '789 Bat Cave', city: 'Gotham', state: 'NJ', zipCode: '07001' },
+      dropoffAddress: { street: '789 Oak St', city: 'Gotham', state: 'NJ', zipCode: '07002' },
+      weight: 10.0,
+      serviceType: 'SAME_DAY',
+  paymentMethod: PAYMENT_METHODS.COD,
+  paymentStatus: PAYMENT_STATUS.PENDING as typeof PAYMENT_STATUS[keyof typeof PAYMENT_STATUS],
+      price: 15.00,
+      createdAt: '2023-10-21T09:00:00Z',
+      updatedAt: '2023-10-23T16:00:00Z',
       currentStatus: ShipmentStatus.EXCEPTION,
       estimatedDelivery: '2023-10-24',
       events: [
@@ -49,7 +85,9 @@ class MockDataService {
       timeSlot: '10:00 AM - 12:00 PM',
       packageDetails: 'Small Box (2kg)',
       earnings: 15.50,
-      distance: '2.5 km'
+      distance: '2.5 km',
+      startCoordinates: { lat: 40.7128, lng: -74.0060 }, // NYC City Hall
+      endCoordinates: { lat: 40.7061, lng: -74.0092 }  // Wall St
     },
     {
       id: 'TSK-102',
@@ -60,7 +98,9 @@ class MockDataService {
       timeSlot: '01:00 PM - 03:00 PM',
       packageDetails: 'Medium Box (5kg)',
       earnings: 22.00,
-      distance: '5.1 km'
+      distance: '5.1 km',
+      startCoordinates: { lat: 40.7061, lng: -74.0092 }, // Wall St
+      endCoordinates: { lat: 40.6782, lng: -73.9442 }  // Brooklyn
     }
   ];
 
@@ -127,11 +167,16 @@ class MockDataService {
     return Promise.resolve(this.shipments.find(s => s.id === id));
   }
 
-  createShipment(shipment: Omit<Shipment, 'id' | 'events' | 'currentStatus'>): Promise<Shipment> {
+  createShipment(shipment: Omit<Shipment, 'id' | 'events' | 'currentStatus' | 'trackingId' | 'createdAt' | 'updatedAt' | 'customerId'>): Promise<Shipment> {
+    const id = `TRK-${Math.floor(Math.random() * 1000000)}`;
     const newShipment: Shipment = {
       ...shipment,
-      id: `TRK-${Math.floor(Math.random() * 1000000)}`,
+      id,
+      trackingId: id,
+      customerId: 'U1', // Default to first user for mock
       currentStatus: ShipmentStatus.PLACED,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       events: [
         {
           status: ShipmentStatus.PLACED,
@@ -161,7 +206,7 @@ class MockDataService {
           id: `TSK-${Math.floor(Math.random() * 10000)}`,
           type: 'PICKUP',
           status: 'PENDING',
-          address: shipment.destination.split(',')[0], // Simplified address
+          address: (shipment.destination || '').split(',')[0], // Simplified address
           customerName: shipment.recipientName,
           timeSlot: 'ASAP',
           packageDetails: 'Standard Package',
@@ -310,4 +355,4 @@ class MockDataService {
   }
 }
 
-export const mockDataService = new MockDataService();
+export const mockDataService = USE_BACKEND ? (apiService as any) : new MockDataService();

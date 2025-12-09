@@ -25,13 +25,25 @@ export interface ShipmentEvent {
 
 export interface Shipment {
   id: string;
-  senderId?: string; // ID of the user who sent the package
+  trackingId: string;
+  customerId: string;
+  riderId?: string;
   recipientName: string;
-  recipientEmail?: string; // Email of the recipient
-  destination: string;
+  pickupAddress: any; // JSONB
+  dropoffAddress: any; // JSONB
+  weight: number;
+  description?: string;
+  serviceType: 'STANDARD' | 'EXPRESS' | 'SAME_DAY';
   currentStatus: ShipmentStatus;
+  paymentMethod: PaymentMethod;
+  paymentStatus: 'PENDING' | 'PAID' | 'FAILED';
+  price: number;
+  distanceMiles?: number;
   estimatedDelivery: string;
   events: ShipmentEvent[];
+  createdAt: string;
+  updatedAt: string;
+  destination?: string;
 }
 
 export interface DashboardStats {
@@ -41,7 +53,7 @@ export interface DashboardStats {
   delayed: number;
 }
 
-export type ViewState = 'DASHBOARD' | 'ACCOUNT_DASHBOARD' | 'FLEET_DASHBOARD' | 'VEHICLE_DASHBOARD' | 'TRACKING' | 'NEW_SHIPMENT' | 'AI_ASSISTANT' | 'RIDER' | 'HUB_MANAGER' | 'PROFILE' | 'MY_ORDERS';
+export type ViewState = 'DASHBOARD' | 'ACCOUNT_DASHBOARD' | 'FLEET_DASHBOARD' | 'VEHICLE_DASHBOARD' | 'TRACKING' | 'NEW_SHIPMENT' | 'AI_ASSISTANT' | 'RIDER' | 'HUB_MANAGER' | 'PROFILE' | 'MY_ORDERS' | 'PAYMENT_DEMO';
 
 // Rider Module Types
 export type RiderTaskType = 'PICKUP' | 'DELIVERY';
@@ -58,6 +70,8 @@ export interface RiderTask {
   earnings: number;
   distance: string;
   shipmentId?: string; // Link to shipment for package tracking
+  startCoordinates?: { lat: number; lng: number };
+  endCoordinates?: { lat: number; lng: number };
 }
 
 export interface RiderEarnings {
@@ -134,6 +148,18 @@ export interface HubManifest {
 }
 
 export type PaymentMethod = 'CREDIT_CARD' | 'WALLET' | 'COD';
+
+export const PAYMENT_METHODS = {
+  CREDIT_CARD: 'CREDIT_CARD' as PaymentMethod,
+  WALLET: 'WALLET' as PaymentMethod,
+  COD: 'COD' as PaymentMethod,
+} as const;
+
+export const PAYMENT_STATUS = {
+  PENDING: 'PENDING' as const,
+  PAID: 'PAID' as const,
+  FAILED: 'FAILED' as const,
+} as const;
 
 // Fleet Management Enhancement Types
 export interface FleetStats {

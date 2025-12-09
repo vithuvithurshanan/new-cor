@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow read/write access for all users during development
+    // TODO: Update these rules for production
+    match /{document=**} {
+      allow read, write: if true;
+    }
+    
+    // Production rules (commented out for now)
+    /*
+    // Users can read/write their own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Shipments - customers can read their own, staff can read/write all
+    match /shipments/{shipmentId} {
+      allow read: if request.auth != null && 
+        (resource.data.customerId == request.auth.uid || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'RIDER', 'HUB_MANAGER']);
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'CUSTOMER'];
+    }
+    
+    // Vehicles - only staff can access
+    match /vehicles/{vehicleId} {
+      allow read, write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'RIDER', 'HUB_MANAGER'];
+    }
+    
+    // Hubs - only staff can access
+    match /hubs/{hubId} {
+      allow read, write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'HUB_MANAGER'];
+    }
+    
+    // Rider tasks - riders can see their own, admins can see all
+    match /riderTasks/{taskId} {
+      allow read, write: if request.auth != null && 
+        (resource.data.riderId == request.auth.uid || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'HUB_MANAGER']);
+    }
+    */
+  }
+}

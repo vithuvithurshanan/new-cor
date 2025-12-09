@@ -81,7 +81,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser }) => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto pb-10">
+    <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-1 gap-8 pb-12 relative-7xl ">
       <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/60 overflow-hidden transition-all duration-300">
 
         {/* Header */}

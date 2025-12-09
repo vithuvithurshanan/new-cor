@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { RiderTask, RiderTaskStatus, RiderEarnings, User, PackageAssignment, Shipment } from '../types';
 import { mockDataService } from '../services/mockDataService';
 import { MapPin, Navigation, Package, Camera, CheckCircle, XCircle, DollarSign, Calendar, ChevronRight, Upload, Truck, User as UserIcon, Lock, QrCode, Scan } from 'lucide-react';
+import { RiderMap } from './RiderMap';
 
 interface RiderViewProps {
   currentUser: User | null;
@@ -88,12 +89,15 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
   };
 
   return (
-    <div className="max-w-md mx-auto bg-slate-100/50 backdrop-blur-xl min-h-[calc(100vh-2rem)] rounded-3xl overflow-hidden shadow-2xl border border-white/50 relative">
+    <div className="max-w-5xl mx-auto bg-slate-100/50 backdrop-blur-xl min-h-[calc(100vh-2rem)] rounded-3xl overflow-hidden shadow-2xl border border-white/50 relative">
 
       {/* Mobile App Header */}
       <div className="bg-slate-900/95 backdrop-blur-md text-white p-4 sticky top-0 z-20 shadow-md">
         <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center gap-3">
+          <div className="bg-slate-800/80 px-3 py-1 rounded-full text-xs font-mono border border-slate-700">
+            ID: {isRider ? 'R-4421' : 'VIEW-ONLY'}
+          </div>
+          <div className="flex items-center gap-4 py-2">
             <div className="w-10 h-10 bg-indigo-500 rounded-full flex items-center justify-center text-white font-bold ring-2 ring-indigo-300">
               {currentUser?.name.charAt(0) || 'U'}
             </div>
@@ -112,9 +116,7 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
               )}
             </div>
           </div>
-          <div className="bg-slate-800/80 px-3 py-1 rounded-full text-xs font-mono border border-slate-700">
-            ID: {isRider ? 'R-4421' : 'VIEW-ONLY'}
-          </div>
+
         </div>
 
         {/* Tabs */}
@@ -266,6 +268,13 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
                     <p className="text-slate-500 text-sm">{selectedTask.distance} away</p>
                   </div>
                 </div>
+
+                {selectedTask.startCoordinates && selectedTask.endCoordinates && (
+                  <div className="h-48 w-full mb-4 rounded-xl overflow-hidden border border-slate-200">
+                    <RiderMap start={selectedTask.startCoordinates} end={selectedTask.endCoordinates} />
+                  </div>
+                )}
+
                 <div className="flex items-center gap-3">
                   <UserIcon className="text-slate-400" size={18} />
                   <span className="text-slate-700 font-medium">{selectedTask.customerName}</span>
@@ -462,7 +471,12 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
   );
 };
 
-const TaskCard = ({ task, onClick }: { task: RiderTask, onClick: () => void }) => {
+interface TaskCardProps {
+  task: RiderTask;
+  onClick: () => void;
+}
+
+const TaskCard: React.FC<TaskCardProps> = ({ task, onClick }) => {
   const isPending = task.status === 'PENDING';
 
   return (
@@ -545,11 +559,13 @@ const EarningsView = ({ stats }: { stats: RiderEarnings }) => (
   </div>
 );
 
-const PackageCard = ({ packageAssignment, shipment, onClick }: {
-  packageAssignment: PackageAssignment,
-  shipment?: Shipment,
-  onClick: () => void
-}) => {
+interface PackageCardProps {
+  packageAssignment: PackageAssignment;
+  shipment?: Shipment;
+  onClick: () => void;
+}
+
+const PackageCard: React.FC<PackageCardProps> = ({ packageAssignment, shipment, onClick }) => {
   const getStatusColor = (status: PackageAssignment['status']) => {
     switch (status) {
       case 'ASSIGNED': return 'bg-blue-100 text-blue-700 border-blue-200';

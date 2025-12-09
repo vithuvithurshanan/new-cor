@@ -54,7 +54,9 @@ export const AssistantView: React.FC = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col max-w-3xl mx-auto bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/60 overflow-hidden">
+    
+    <div className="h-[calc(110vh-8rem)] flex flex-col max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-1 gap-8 pb-12 relative-7xl  animate-fade-in bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/60 overflow-hidden">
+  
       {/* Chat Header */}
       <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 p-4 flex items-center gap-3 text-white shadow-md">
         <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
@@ -132,5 +134,6 @@ export const AssistantView: React.FC = () => {
         </p>
       </form>
     </div>
+    
   );
 };

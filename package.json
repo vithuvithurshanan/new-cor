@@ -6,13 +6,23 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "./deploy.sh",
+    "firebase:emulators": "firebase emulators:start",
+    "firebase:deploy": "firebase deploy",
+    "firebase:deploy:hosting": "firebase deploy --only hosting:chat-app-6dfa7-2a6bf",
+    "firebase:deploy:firestore": "firebase deploy --only firestore"
   },
   "dependencies": {
+    "@google/genai": "^1.30.0",
+    "@types/leaflet": "^1.9.21",
+    "firebase": "^12.6.0",
+    "leaflet": "^1.9.4",
+    "leaflet-routing-machine": "^3.2.12",
+    "lucide-react": "^0.555.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "@google/genai": "^1.30.0",
-    "lucide-react": "^0.555.0",
+    "react-leaflet": "^5.0.0",
     "recharts": "^3.5.1"
   },
   "devDependencies": {

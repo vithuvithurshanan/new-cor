@@ -78,7 +78,7 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ currentU
     };
 
     return (
-        <div className="max-w-6xl mx-auto pb-10 animate-fade-in">
+        <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-1 gap-8 pb-12 relative-7xl  animate-fade-in">
             {/* Header */}
             <div className="mb-8">
                 <h1 className="text-3xl font-bold text-slate-800 mb-2">My Orders</h1>

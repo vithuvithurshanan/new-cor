@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, UserRole } from '../types';
-import { sendOtp, verifyOtp } from '../services/authService';
+import { sendOtp, verifyOtp, signInWithEmail, signUpWithEmail } from '../services/authService';
 import { Box, Lock, Phone, Mail, User as UserIcon, ArrowRight, Loader2, ShieldCheck, Bike, Warehouse, LayoutDashboard, Plane, Cloud, MapPin } from 'lucide-react';
 
 interface LoginViewProps {
@@ -11,40 +11,38 @@ interface LoginViewProps {
 export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
   const [role, setRole] = useState<UserRole>('CUSTOMER');
   const [identifier, setIdentifier] = useState('');
-  const [otp, setOtp] = useState('');
-  const [step, setStep] = useState<'INPUT' | 'OTP'>('INPUT');
+  const [password, setPassword] = useState('');
+  const [step, setStep] = useState<'LOGIN' | 'SIGNUP'>('LOGIN');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSendOtp = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!identifier) return;
+    if (!identifier || !password) return setError('Email and password are required');
     setLoading(true);
     setError('');
     try {
-      await sendOtp(identifier);
-      setStep('OTP');
-    } catch (err) {
-      setError('Failed to send OTP. Please try again.');
+      const user = await signInWithEmail(identifier, password);
+      onLogin(user);
+    } catch (err: any) {
+      console.error('Login failed', err);
+      setError(err?.message || 'Login failed');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleVerify = async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otp) return;
+    if (!identifier || !password) return setError('Email and password are required');
     setLoading(true);
     setError('');
     try {
-      const user = await verifyOtp(identifier, otp, role);
-      if (user) {
-        onLogin(user);
-      } else {
-        setError('Verification failed.');
-      }
-    } catch (err) {
-      setError('Invalid OTP. Try 1234.');
+      const user = await signUpWithEmail(identifier, password, role, undefined);
+      onLogin(user);
+    } catch (err: any) {
+      console.error('Signup failed', err);
+      setError(err?.message || 'Signup failed');
     } finally {
       setLoading(false);
     }
@@ -104,15 +102,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
           <Cloud size={180} />
         </div>
         <div className="absolute bottom-20 right-0 text-white/10 animate-drift-reverse" style={{ animationDuration: '28s' }}>
-           <Cloud size={140} />
+          <Cloud size={140} />
         </div>
-        
+
         {/* Flying Objects */}
         <div className="absolute top-1/4 -left-20 text-indigo-200/20 animate-drift" style={{ animationDuration: '15s', animationDelay: '2s' }}>
-           <Plane size={64} />
+          <Plane size={64} />
         </div>
         <div className="absolute bottom-1/3 -right-20 text-purple-200/20 animate-drift-reverse" style={{ animationDuration: '20s', animationDelay: '1s' }}>
-           <Box size={48} />
+          <Box size={48} />
         </div>
       </div>
 
@@ -125,7 +123,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
 
       {/* Glassmorphism Card */}
       <div className="w-full max-w-md bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl shadow-2xl overflow-hidden relative z-10 animate-float" style={{ animationDelay: '-3s' }}>
-        
+
         {/* Header */}
         <div className="bg-white/10 p-6 text-center border-b border-white/10">
           <h2 className="text-2xl font-bold text-white mb-1">Welcome Back</h2>
@@ -134,20 +132,20 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
 
         {/* Role Tabs */}
         <div className="flex border-b border-white/10 bg-black/5">
-          <button 
-            onClick={() => { setRole('CUSTOMER'); setStep('INPUT'); setError(''); setIdentifier('alice@example.com'); }}
+          <button
+            onClick={() => { setRole('CUSTOMER'); setStep('LOGIN'); setError(''); setIdentifier('alice@example.com'); }}
             className={`flex-1 py-4 text-sm font-medium transition-all ${role === 'CUSTOMER' ? 'text-white bg-white/10 shadow-[inset_0_-2px_0_rgba(255,255,255,0.5)]' : 'text-indigo-100 hover:bg-white/5 hover:text-white'}`}
           >
             Customer
           </button>
-          <button 
-            onClick={() => { setRole('RIDER'); setStep('INPUT'); setError(''); setIdentifier('R-4421'); }}
+          <button
+            onClick={() => { setRole('RIDER'); setStep('LOGIN'); setError(''); setIdentifier('R-4421'); }}
             className={`flex-1 py-4 text-sm font-medium transition-all ${role === 'RIDER' ? 'text-white bg-white/10 shadow-[inset_0_-2px_0_rgba(255,255,255,0.5)]' : 'text-indigo-100 hover:bg-white/5 hover:text-white'}`}
           >
             Rider
           </button>
-          <button 
-            onClick={() => { setRole('ADMIN'); setStep('INPUT'); setError(''); setIdentifier('admin@courieros.com'); }}
+          <button
+            onClick={() => { setRole('ADMIN'); setStep('LOGIN'); setError(''); setIdentifier('admin@courieros.com'); }}
             className={`flex-1 py-4 text-sm font-medium transition-all ${role === 'ADMIN' ? 'text-white bg-white/10 shadow-[inset_0_-2px_0_rgba(255,255,255,0.5)]' : 'text-indigo-100 hover:bg-white/5 hover:text-white'}`}
           >
             Admin
@@ -156,75 +154,91 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
 
         {/* Form */}
         <div className="p-8">
-          {step === 'INPUT' ? (
-            <form onSubmit={handleSendOtp} className="space-y-6 animate-in slide-in-from-right duration-300">
+          {step === 'LOGIN' ? (
+            <form onSubmit={handleLogin} className="space-y-6 animate-in slide-in-from-right duration-300">
               <div>
-                <label className="block text-sm font-medium text-indigo-50 mb-2 drop-shadow-sm">{currentRoleConfig.label} Login</label>
+                <label className="block text-sm font-medium text-indigo-50 mb-2 drop-shadow-sm">Email Login</label>
                 <div className="relative group">
                   <div className="absolute left-3 top-3.5 text-indigo-200 group-focus-within:text-white transition-colors">
-                    <currentRoleConfig.icon size={20} />
+                    <Mail size={20} />
                   </div>
-                  <input 
-                    type="text" 
+                  <input
+                    type="email"
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder={currentRoleConfig.placeholder}
+                    placeholder="you@example.com"
                     className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-white/40 focus:border-transparent outline-none transition-all text-white placeholder:text-indigo-200/70"
                     required
                   />
                 </div>
               </div>
-              <button 
-                type="submit" 
-                disabled={loading}
-                className="w-full bg-white text-indigo-600 py-3 rounded-xl font-bold shadow-lg hover:bg-indigo-50 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
-              >
-                {loading ? <Loader2 className="animate-spin" /> : <>Send Verification Code <ArrowRight size={18} /></>}
-              </button>
-            </form>
-          ) : (
-             <form onSubmit={handleVerify} className="space-y-6 animate-in slide-in-from-right duration-300">
-               <div className="text-center mb-6">
-                 <div className="bg-emerald-500/20 backdrop-blur-md w-14 h-14 rounded-full flex items-center justify-center text-emerald-300 mx-auto mb-3 border border-emerald-500/30">
-                   <ShieldCheck size={28} />
-                 </div>
-                 <h3 className="text-white font-bold text-lg">Verification Required</h3>
-                 <p className="text-sm text-indigo-100">Enter the OTP sent to {identifier}</p>
-                 <p className="text-xs text-indigo-200 font-mono mt-2 bg-white/10 inline-block px-3 py-1 rounded-full border border-white/10">( Hint: 1234 )</p>
-               </div>
 
-               <div>
-                <label className="block text-sm font-medium text-indigo-50 mb-2 text-center">One-Time Password</label>
-                <div className="flex justify-center">
-                  <input 
-                    type="text" 
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                    placeholder="• • • •"
-                    className="w-40 text-center text-2xl tracking-widest py-3 bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-white/40 outline-none text-white placeholder:text-white/20"
-                    maxLength={4}
-                    autoFocus
-                    required
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-indigo-50 mb-2">Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Your password"
+                  className="w-full pr-4 py-3 bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-white/40 outline-none transition-all text-white placeholder:text-indigo-200/70"
+                  required
+                />
               </div>
 
-              <button 
-                type="submit" 
-                disabled={loading}
-                className="w-full bg-white text-indigo-600 py-3 rounded-xl font-bold shadow-lg hover:bg-indigo-50 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
-              >
-                {loading ? <Loader2 className="animate-spin" /> : 'Verify & Login'}
-              </button>
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 bg-white text-indigo-600 py-3 rounded-xl font-bold shadow-lg hover:bg-indigo-50 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+                >
+                  {loading ? <Loader2 className="animate-spin" /> : 'Sign In'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setStep('SIGNUP'); setError(''); }}
+                  className="flex-1 border border-white/10 text-white py-3 rounded-xl font-medium hover:bg-white/5 transition-all"
+                >
+                  Create Account
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleSignup} className="space-y-6 animate-in slide-in-from-right duration-300">
+              <div>
+                <label className="block text-sm font-medium text-indigo-50 mb-2">Full Name</label>
+                <input type="text" className="w-full pr-4 py-3 bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-white/40 outline-none transition-all text-white placeholder:text-indigo-200/70" placeholder="Your name" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-indigo-50 mb-2">Address</label>
+                <input type="text" className="w-full pr-4 py-3 bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-white/40 outline-none transition-all text-white placeholder:text-indigo-200/70" placeholder="Street, City, State" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-indigo-50 mb-2">Email</label>
+                <input type="email" value={identifier} onChange={(e) => setIdentifier(e.target.value)} className="w-full pr-4 py-3 bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-white/40 outline-none transition-all text-white placeholder:text-indigo-200/70" placeholder="you@example.com" required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-indigo-50 mb-2">Phone</label>
+                <input type="text" className="w-full pr-4 py-3 bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-white/40 outline-none transition-all text-white placeholder:text-indigo-200/70" placeholder="+1 555 555 5555" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-indigo-50 mb-2">Password</label>
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pr-4 py-3 bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-white/40 outline-none transition-all text-white placeholder:text-indigo-200/70" placeholder="Choose a password" required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-indigo-50 mb-2">Role</label>
+                <select value={role} onChange={(e) => setRole(e.target.value as UserRole)} className="w-full pr-4 py-3 bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-white/40 outline-none transition-all text-white">
+                  <option value="CUSTOMER">Customer</option>
+                  <option value="RIDER">Rider</option>
+                  <option value="HUB_MANAGER">Hub Manager</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </div>
 
-              <button 
-                type="button" 
-                onClick={() => setStep('INPUT')}
-                className="w-full text-sm text-indigo-200 hover:text-white transition-colors"
-              >
-                Change {currentRoleConfig.label} ID
-              </button>
-             </form>
+              <div className="flex gap-3">
+                <button type="submit" disabled={loading} className="flex-1 bg-white text-indigo-600 py-3 rounded-xl font-bold shadow-lg hover:bg-indigo-50 hover:scale-[1.02] transition-all">{loading ? <Loader2 className="animate-spin" /> : 'Create Account'}</button>
+                <button type="button" onClick={() => { setStep('LOGIN'); setError(''); }} className="flex-1 border border-white/10 text-white py-3 rounded-xl font-medium hover:bg-white/5 transition-all">Back to Login</button>
+              </div>
+            </form>
           )}
 
           {error && (
@@ -242,8 +256,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
           </p>
         </div>
       </div>
-      
+
       <p className="mt-8 text-indigo-200/60 text-sm font-medium tracking-wide">© 2024 CourierOS Inc. Secure Logistics.</p>
-    </div>
+    </div >
   );
 };

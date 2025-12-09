@@ -218,7 +218,7 @@ export const FleetDashboardView: React.FC<FleetDashboardViewProps> = ({ currentU
     );
 
     const renderRiders = () => (
-        <div className="space-y-6 animate-fade-in">
+        <div className="max-w-4xl  mx-auto grid grid-cols-1 lg:grid-cols-1 gap-8 pb-12 relative-7xl  animate-fade-in">
             <div className="flex justify-between items-center">
                 <div>
                     <h2 className="text-2xl font-bold text-slate-800">Rider Management</h2>
