@@ -2,7 +2,8 @@
 import { User, UserRole } from '../types';
 import { apiService } from './apiService';
 import { auth } from '../firebaseClient';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut as fbSignOut, updateProfile } from 'firebase/auth';
+import { firebaseService } from './firebaseService';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut as fbSignOut, updateProfile, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
 const USE_BACKEND = import.meta.env.VITE_USE_BACKEND === 'true';
 
@@ -83,6 +84,14 @@ export const signUpWithEmail = async (email: string, password: string, role: Use
     status: 'ACTIVE'
   };
 
+  // Save user to Firestore
+  try {
+    await firebaseService.addUser(user);
+  } catch (e) {
+    console.error('Failed to save user to Firestore', e);
+    // Consider whether to throw here or allow partial success
+  }
+
   // Set API token so backend requests are authenticated
   try {
     const token = await cred.user.getIdToken();
@@ -104,14 +113,26 @@ export const signInWithEmail = async (email: string, password: string): Promise<
   const cred = await signInWithEmailAndPassword(auth, email, password);
   const firebaseUser = cred.user;
 
-  const user: User = {
-    id: firebaseUser.uid,
-    email: firebaseUser.email || email,
-    name: firebaseUser.displayName || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'User'),
-    phone: firebaseUser.phoneNumber || '',
-    role: 'CUSTOMER',
-    status: 'ACTIVE'
-  };
+  // Fetch user details (including role) from Firestore
+  let user: User | null = null;
+  try {
+    user = await firebaseService.getUser(firebaseUser.uid);
+  } catch (e) {
+    console.error('Failed to fetch user from Firestore', e);
+  }
+
+  // Fallback if user not found in Firestore (e.g. legacy user or sync issue)
+  if (!user) {
+    console.warn('User not found in Firestore, using default customer role');
+    user = {
+      id: firebaseUser.uid,
+      email: firebaseUser.email || email,
+      name: firebaseUser.displayName || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'User'),
+      phone: firebaseUser.phoneNumber || '',
+      role: 'CUSTOMER', // Default fallback
+      status: 'ACTIVE'
+    };
+  }
 
   // Set API token so backend requests are authenticated
   try {
@@ -127,10 +148,54 @@ export const signInWithEmail = async (email: string, password: string): Promise<
 export const signOut = async (): Promise<void> => {
   if (USE_BACKEND) {
     // call backend logout if implemented
-    try { await apiService.logout(); } catch (_) {}
+    try { await apiService.logout(); } catch (_) { }
     return;
   }
   // Clear local API token and sign out from Firebase
-  try { apiService.setToken(null); } catch (_) {}
+  try { apiService.setToken(null); } catch (_) { }
   await fbSignOut(auth);
+};
+
+// Google Sign-In (defaults to CUSTOMER role)
+export const signInWithGoogle = async (): Promise<User> => {
+  const provider = new GoogleAuthProvider();
+  const cred = await signInWithPopup(auth, provider);
+  const firebaseUser = cred.user;
+
+  // Check if user already exists in Firestore
+  let user: User | null = null;
+  try {
+    user = await firebaseService.getUser(firebaseUser.uid);
+  } catch (e) {
+    console.error('Failed to fetch user from Firestore', e);
+  }
+
+  // If user doesn't exist, create new user with CUSTOMER role
+  if (!user) {
+    user = {
+      id: firebaseUser.uid,
+      email: firebaseUser.email || '',
+      name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+      phone: firebaseUser.phoneNumber || '',
+      role: 'CUSTOMER', // Default to CUSTOMER for Google sign-ins
+      status: 'ACTIVE'
+    };
+
+    // Save to Firestore
+    try {
+      await firebaseService.addUser(user);
+    } catch (e) {
+      console.error('Failed to save Google user to Firestore', e);
+    }
+  }
+
+  // Set API token
+  try {
+    const token = await firebaseUser.getIdToken();
+    apiService.setToken(token);
+  } catch (e) {
+    console.warn('Failed to get id token after Google sign in', e);
+  }
+
+  return user;
 };

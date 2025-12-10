@@ -49,8 +49,12 @@ const INITIAL_PRICING: PricingConfig = {
 
 type AccountTab = 'OVERVIEW' | 'GOVERNMENT' | 'ACTUAL' | 'PRICING';
 
-export const AccountDashboardView: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<AccountTab>('OVERVIEW');
+interface AccountDashboardViewProps {
+    initialTab?: AccountTab;
+}
+
+export const AccountDashboardView: React.FC<AccountDashboardViewProps> = ({ initialTab = 'OVERVIEW' }) => {
+    const [activeTab, setActiveTab] = useState<AccountTab>(initialTab);
     const [loadingAi, setLoadingAi] = useState(false);
 
     // -- PRICING STATES --

@@ -5,6 +5,10 @@ export interface Address {
     city: string;
     state: string;
     zipCode: string;
+    coordinates?: {
+        lat: number;
+        lng: number;
+    };
 }
 
 export interface ValidationResult {

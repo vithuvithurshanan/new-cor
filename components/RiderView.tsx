@@ -22,6 +22,8 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
   const [isPodModalOpen, setIsPodModalOpen] = useState(false);
   const [podData, setPodData] = useState({ photoDesc: '', signature: '' });
   const [verifying, setVerifying] = useState(false);
+  const [isFullMapOpen, setIsFullMapOpen] = useState(false);
+  const [vehiclePosition, setVehiclePosition] = useState({ lat: 40.7489, lng: -73.9680 });
 
   // Package tracking state
   const [packages, setPackages] = useState<PackageAssignment[]>([]);
@@ -92,9 +94,9 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
     <div className="max-w-5xl mx-auto bg-slate-100/50 backdrop-blur-xl min-h-[calc(100vh-2rem)] rounded-3xl overflow-hidden shadow-2xl border border-white/50 relative">
 
       {/* Mobile App Header */}
-      <div className="bg-slate-900/95 backdrop-blur-md text-white p-4 sticky top-0 z-20 shadow-md">
+      <div className="bg-white/95 backdrop-blur-md text-slate-800 p-4 sticky top-0 z-20 shadow-md border-b border-slate-200">
         <div className="flex justify-between items-center mb-4">
-          <div className="bg-slate-800/80 px-3 py-1 rounded-full text-xs font-mono border border-slate-700">
+          <div className="bg-slate-100 px-3 py-1 rounded-full text-xs font-mono border border-slate-200">
             ID: {isRider ? 'R-4421' : 'VIEW-ONLY'}
           </div>
           <div className="flex items-center gap-4 py-2">
@@ -120,22 +122,22 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
         </div>
 
         {/* Tabs */}
-        <div className="flex bg-slate-800 p-1 rounded-lg">
+        <div className="flex bg-slate-100 p-1 rounded-lg">
           <button
             onClick={() => setActiveTab('TASKS')}
-            className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'TASKS' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+            className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'TASKS' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
           >
             Tasks
           </button>
           <button
             onClick={() => setActiveTab('PACKAGES')}
-            className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'PACKAGES' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+            className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'PACKAGES' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
           >
             Packages
           </button>
           <button
             onClick={() => setActiveTab('EARNINGS')}
-            className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'EARNINGS' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+            className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'EARNINGS' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
           >
             Earnings
           </button>
@@ -270,8 +272,21 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
                 </div>
 
                 {selectedTask.startCoordinates && selectedTask.endCoordinates && (
-                  <div className="h-48 w-full mb-4 rounded-xl overflow-hidden border border-slate-200">
-                    <RiderMap start={selectedTask.startCoordinates} end={selectedTask.endCoordinates} />
+                  <div className="h-64 w-full mb-4 rounded-xl overflow-hidden border border-slate-200">
+                    <RiderMap
+                      start={selectedTask.startCoordinates}
+                      end={selectedTask.endCoordinates}
+                      vehicleLocation={
+                        selectedTask.status === 'IN_PROGRESS'
+                          ? { lat: 40.7489, lng: -73.9680 } // Simulated moving vehicle
+                          : undefined
+                      }
+                      showLocationOverlay={selectedTask.status === 'IN_PROGRESS'}
+                      currentAddress={selectedTask.status === 'IN_PROGRESS' ? "5th Avenue & E 42nd St, New York" : undefined}
+                      destinationAddress={selectedTask.address}
+                      estimatedTime={selectedTask.status === 'IN_PROGRESS' ? "12 mins" : undefined}
+                      distance={selectedTask.distance}
+                    />
                   </div>
                 )}
 
@@ -334,13 +349,22 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
                 )}
 
                 {selectedTask.status === 'IN_PROGRESS' && (
-                  <button
-                    onClick={() => setIsPodModalOpen(true)}
-                    className="w-full py-4 bg-emerald-600 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2"
-                  >
-                    <CheckCircle size={20} />
-                    {selectedTask.type === 'PICKUP' ? 'Confirm Pickup' : 'Complete Delivery'}
-                  </button>
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => setIsFullMapOpen(true)}
+                      className="w-full py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2"
+                    >
+                      <Navigation size={20} />
+                      Open Navigation
+                    </button>
+                    <button
+                      onClick={() => setIsPodModalOpen(true)}
+                      className="w-full py-4 bg-emerald-600 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle size={20} />
+                      {selectedTask.type === 'PICKUP' ? 'Confirm Pickup' : 'Complete Delivery'}
+                    </button>
+                  </div>
                 )}
 
                 {selectedTask.status === 'COMPLETED' && (
@@ -462,6 +486,58 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
               className="w-full mt-3 py-3 text-slate-500 font-medium"
             >
               Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Full Screen Navigation Map */}
+      {isFullMapOpen && selectedTask && selectedTask.startCoordinates && selectedTask.endCoordinates && (
+        <div className="absolute inset-0 bg-white z-50 flex flex-col">
+          {/* Map Header */}
+          <div className="bg-gradient-to-r from-indigo-600 to-violet-600 text-white p-4 shadow-lg flex items-center justify-between">
+            <button
+              onClick={() => setIsFullMapOpen(false)}
+              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+            >
+              <ChevronRight className="rotate-180" size={24} />
+            </button>
+            <div className="text-center flex-1">
+              <h3 className="font-bold text-lg">Navigation</h3>
+              <p className="text-xs text-indigo-100">{selectedTask.type === 'PICKUP' ? 'To Pickup' : 'To Delivery'}</p>
+            </div>
+            <div className="w-10"></div>
+          </div>
+
+          {/* Full Screen Map */}
+          <div className="flex-1 relative">
+            <RiderMap
+              start={selectedTask.startCoordinates}
+              end={selectedTask.endCoordinates}
+              vehicleLocation={vehiclePosition}
+              showLocationOverlay={true}
+              currentAddress="5th Avenue & E 42nd St, New York, NY"
+              destinationAddress={selectedTask.address}
+              estimatedTime="12 mins"
+              distance={selectedTask.distance}
+            />
+          </div>
+
+          {/* Quick Actions Bar */}
+          <div className="bg-white border-t border-slate-200 p-4 flex gap-3">
+            <button className="flex-1 py-3 bg-slate-100 text-slate-700 font-medium rounded-xl flex items-center justify-center gap-2">
+              <MapPin size={18} />
+              Recenter
+            </button>
+            <button
+              onClick={() => {
+                setIsFullMapOpen(false);
+                setIsPodModalOpen(true);
+              }}
+              className="flex-[2] py-3 bg-emerald-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg"
+            >
+              <CheckCircle size={18} />
+              Arrived
             </button>
           </div>
         </div>

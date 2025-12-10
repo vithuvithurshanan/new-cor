@@ -23,14 +23,25 @@ export interface ShipmentEvent {
   };
 }
 
+export interface Address {
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
+}
+
 export interface Shipment {
   id: string;
   trackingId: string;
   customerId: string;
   riderId?: string;
   recipientName: string;
-  pickupAddress: any; // JSONB
-  dropoffAddress: any; // JSONB
+  pickupAddress: Address;
+  dropoffAddress: Address;
   weight: number;
   description?: string;
   serviceType: 'STANDARD' | 'EXPRESS' | 'SAME_DAY';
@@ -53,7 +64,7 @@ export interface DashboardStats {
   delayed: number;
 }
 
-export type ViewState = 'DASHBOARD' | 'ACCOUNT_DASHBOARD' | 'FLEET_DASHBOARD' | 'VEHICLE_DASHBOARD' | 'TRACKING' | 'NEW_SHIPMENT' | 'AI_ASSISTANT' | 'RIDER' | 'HUB_MANAGER' | 'PROFILE' | 'MY_ORDERS' | 'PAYMENT_DEMO';
+export type ViewState = 'DASHBOARD' | 'ACCOUNT_DASHBOARD' | 'FLEET_DASHBOARD' | 'VEHICLE_DASHBOARD' | 'TRACKING' | 'NEW_SHIPMENT' | 'AI_ASSISTANT' | 'RIDER' | 'HUB_MANAGER' | 'PROFILE' | 'MY_ORDERS' | 'PAYMENT_DEMO' | 'USER_MANAGEMENT' | 'SHIPMENTS' | 'NOTIFICATIONS' | 'SYSTEM_STATUS' | 'USERS_CUSTOMERS' | 'USERS_RIDERS' | 'USERS_ADMINS' | 'USERS_HUB_MANAGERS' | 'SHIPMENTS_PLACED' | 'SHIPMENTS_PICKUP_ASSIGNED' | 'SHIPMENTS_IN_TRANSIT' | 'SHIPMENTS_DELIVERED' | 'SHIPMENTS_EXCEPTION' | 'FLEET_OVERVIEW' | 'FLEET_RIDER_APP' | 'FLEET_TRACKING' | 'FLEET_RIDERS' | 'ACCOUNT_OVERVIEW' | 'ACCOUNT_GOVERNMENT' | 'ACCOUNT_ACTUAL' | 'ACCOUNT_PRICING' | 'HUB_DASHBOARD' | 'HUB_INBOUND' | 'HUB_OUTBOUND' | 'HUB_INVENTORY' | 'HUB_NETWORK' | 'CUSTOMER_DASHBOARD';
 
 // Rider Module Types
 export type RiderTaskType = 'PICKUP' | 'DELIVERY';

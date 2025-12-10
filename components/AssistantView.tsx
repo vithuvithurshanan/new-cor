@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { chatWithLogisticsBot } from '../services/geminiService';
-import { Send, Bot, User, MessageSquare } from 'lucide-react';
+import { chatWithLogisticsBot, generateWeeklyBusinessForecast } from '../services/geminiService';
+import { mockDataService } from '../services/mockDataService';
+import { Send, Bot, User, MessageSquare, Calendar } from 'lucide-react';
+import { User as UserType } from '../types';
 
 interface Message {
   id: string;
@@ -9,7 +11,11 @@ interface Message {
   timestamp: Date;
 }
 
-export const AssistantView: React.FC = () => {
+interface AssistantViewProps {
+  currentUser?: UserType | null;
+}
+
+export const AssistantView: React.FC<AssistantViewProps> = ({ currentUser }) => {
   const [messages, setMessages] = useState<Message[]>([
     { id: '1', role: 'bot', text: 'Hello! I am the CourierOS Virtual Assistant. How can I help you track a package or understand our services today?', timestamp: new Date() }
   ]);
@@ -53,22 +59,58 @@ export const AssistantView: React.FC = () => {
     setIsTyping(false);
   };
 
+  const handleGenerateForecast = async () => {
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      text: "Generate Weekly Business Forecast",
+      timestamp: new Date()
+    };
+    setMessages(prev => [...prev, userMsg]);
+    setIsTyping(true);
+
+    const stats = await mockDataService.getDashboardStats();
+    const responseText = await generateWeeklyBusinessForecast(stats);
+
+    const botMsg: Message = {
+      id: (Date.now() + 1).toString(),
+      role: 'bot',
+      text: responseText,
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, botMsg]);
+    setIsTyping(false);
+  };
+
   return (
-    
+
     <div className="h-[calc(110vh-8rem)] flex flex-col max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-1 gap-8 pb-12 relative-7xl  animate-fade-in bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/60 overflow-hidden">
-  
+
       {/* Chat Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 p-4 flex items-center gap-3 text-white shadow-md">
-        <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
-          <MessageSquare size={20} />
+      <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 p-4 flex items-center justify-between text-white shadow-md">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
+            <MessageSquare size={20} />
+          </div>
+          <div>
+            <h3 className="font-bold">Support Assistant</h3>
+            <p className="text-indigo-200 text-xs flex items-center gap-1">
+              <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+              Online • Powered by Gemini
+            </p>
+          </div>
         </div>
-        <div>
-          <h3 className="font-bold">Support Assistant</h3>
-          <p className="text-indigo-200 text-xs flex items-center gap-1">
-            <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-            Online • Powered by Gemini
-          </p>
-        </div>
+        {currentUser?.role === 'ADMIN' && (
+          <button
+            onClick={handleGenerateForecast}
+            disabled={isTyping}
+            className="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-2 backdrop-blur-sm border border-white/10"
+          >
+            <Calendar size={14} />
+            Weekly Forecast
+          </button>
+        )}
       </div>
 
       {/* Messages Area */}
@@ -81,21 +123,21 @@ export const AssistantView: React.FC = () => {
             `}>
               {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
             </div>
-            
+
             <div className={`
               max-w-[80%] p-3 rounded-2xl shadow-sm text-sm leading-relaxed backdrop-blur-md border border-white/20
-              ${msg.role === 'user' 
-                ? 'bg-indigo-600 text-white rounded-tr-none shadow-indigo-200/50' 
+              ${msg.role === 'user'
+                ? 'bg-indigo-600 text-white rounded-tr-none shadow-indigo-200/50'
                 : 'bg-white/80 text-slate-700 rounded-tl-none shadow-sm'}
             `}>
               {msg.text}
               <div className={`text-[10px] mt-1 opacity-70 ${msg.role === 'user' ? 'text-indigo-100' : 'text-slate-400'}`}>
-                {msg.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </div>
             </div>
           </div>
         ))}
-        
+
         {isTyping && (
           <div className="flex gap-3">
             <div className="w-8 h-8 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center">
@@ -103,8 +145,8 @@ export const AssistantView: React.FC = () => {
             </div>
             <div className="bg-white/60 border border-white/40 p-3 rounded-2xl rounded-tl-none flex items-center gap-1">
               <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
-              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></span>
-              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></span>
+              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></span>
+              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
             </div>
           </div>
         )}
@@ -114,15 +156,15 @@ export const AssistantView: React.FC = () => {
       {/* Input Area */}
       <form onSubmit={handleSend} className="p-4 bg-white/50 border-t border-white/50 backdrop-blur-md">
         <div className="flex items-center gap-2 bg-white/70 border border-white/50 rounded-2xl px-4 py-2 focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:border-indigo-500/50 transition-all shadow-sm">
-          <input 
-            type="text" 
+          <input
+            type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your question..."
             className="flex-1 bg-transparent outline-none text-slate-700 placeholder:text-slate-400"
           />
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={!input.trim() || isTyping}
             className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors disabled:opacity-50"
           >
@@ -134,6 +176,6 @@ export const AssistantView: React.FC = () => {
         </p>
       </form>
     </div>
-    
+
   );
 };

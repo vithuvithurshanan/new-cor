@@ -196,7 +196,7 @@ export const PlaceOrderView: React.FC<{ currentUser?: User | null }> = ({ curren
         weight: formData.weight,
         description: formData.description,
         serviceType: formData.serviceType,
-        currentStatus: 'PLACED' as const,
+        currentStatus: ShipmentStatus.PLACED,
         paymentMethod: paymentMethod,
         paymentStatus: (paymentMethod === PAYMENT_METHODS.COD ? PAYMENT_STATUS.PENDING : PAYMENT_STATUS.PAID) as typeof PAYMENT_STATUS[keyof typeof PAYMENT_STATUS],
         price: quote.price,
@@ -204,7 +204,7 @@ export const PlaceOrderView: React.FC<{ currentUser?: User | null }> = ({ curren
         estimatedDelivery: quote.eta,
         events: [
           {
-            status: 'PLACED' as const,
+            status: ShipmentStatus.PLACED,
             timestamp: new Date().toISOString(),
             description: 'Order placed successfully',
             location: formData.pickupAddress.city + ', ' + formData.pickupAddress.state
@@ -723,24 +723,24 @@ export const PlaceOrderView: React.FC<{ currentUser?: User | null }> = ({ curren
 
       {/* Right Column: Order Summary */}
       <div className="lg:col-span-1">
-        <div className="bg-slate-900/95 backdrop-blur-xl text-white p-6 rounded-3xl shadow-2xl sticky top-6 border border-slate-700">
-          <h3 className="text-lg font-bold mb-6 border-b border-slate-700 pb-4">Order Summary</h3>
+        <div className="bg-white/95 backdrop-blur-xl text-slate-800 p-6 rounded-3xl shadow-2xl sticky top-6 border border-slate-200">
+          <h3 className="text-lg font-bold mb-6 border-b border-slate-200 pb-4">Order Summary</h3>
 
           <div className="space-y-4 mb-8">
             <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Service</span>
+              <span className="text-slate-500">Service</span>
               <span className="font-medium">{formData.serviceType.replace('_', ' ')}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Weight</span>
+              <span className="text-slate-500">Weight</span>
               <span className="font-medium">{formData.weight} kg</span>
             </div>
 
             {/* Distance Information */}
             {calculatingDistance && (
               <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Distance</span>
-                <span className="font-medium text-blue-400 flex items-center gap-2">
+                <span className="text-slate-500">Distance</span>
+                <span className="font-medium text-blue-600 flex items-center gap-2">
                   <Loader2 size={14} className="animate-spin" />
                   Calculating...
                 </span>
@@ -748,22 +748,22 @@ export const PlaceOrderView: React.FC<{ currentUser?: User | null }> = ({ curren
             )}
 
             {distanceInfo && !calculatingDistance && (
-              <div className="space-y-2 border-t border-slate-700 pt-3">
-                <div className="flex items-center gap-2 text-xs text-slate-400 mb-2">
+              <div className="space-y-2 border-t border-slate-200 pt-3">
+                <div className="flex items-center gap-2 text-xs text-slate-500 mb-2">
                   <Navigation size={14} />
                   <span>Route Distance</span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-500">Company → Pickup</span>
-                  <span className="font-medium text-slate-300">{formatDistance(distanceInfo.segments.companyToPickup)}</span>
+                  <span className="font-medium text-slate-700">{formatDistance(distanceInfo.segments.companyToPickup)}</span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-500">Pickup → Dropoff</span>
-                  <span className="font-medium text-slate-300">{formatDistance(distanceInfo.segments.pickupToDropoff)}</span>
+                  <span className="font-medium text-slate-700">{formatDistance(distanceInfo.segments.pickupToDropoff)}</span>
                 </div>
-                <div className="flex justify-between text-sm font-bold border-t border-slate-700 pt-2">
-                  <span className="text-slate-300">Total Distance</span>
-                  <span className="text-emerald-400">{formatDistance(distanceInfo.totalMiles)}</span>
+                <div className="flex justify-between text-sm font-bold border-t border-slate-200 pt-2">
+                  <span className="text-slate-700">Total Distance</span>
+                  <span className="text-emerald-600">{formatDistance(distanceInfo.totalMiles)}</span>
                 </div>
               </div>
             )}
@@ -776,33 +776,33 @@ export const PlaceOrderView: React.FC<{ currentUser?: User | null }> = ({ curren
             )}
 
             <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Estimated Delivery</span>
-              <span className="font-medium text-emerald-400">{quote.eta}</span>
+              <span className="text-slate-500">Estimated Delivery</span>
+              <span className="font-medium text-emerald-600">{quote.eta}</span>
             </div>
           </div>
 
 
-          <div className="bg-slate-800/80 rounded-xl p-4 mb-6">
+          <div className="bg-slate-100 rounded-xl p-4 mb-6">
             {distanceInfo && (
-              <div className="space-y-2 mb-3 pb-3 border-b border-slate-700">
+              <div className="space-y-2 mb-3 pb-3 border-b border-slate-200">
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">Base + Weight</span>
-                  <span className="text-slate-300">${quote.basePrice}.00</span>
+                  <span className="text-slate-500">Base + Weight</span>
+                  <span className="text-slate-700">${quote.basePrice}.00</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">Distance ({distanceInfo.totalMiles.toFixed(1)} mi × $2)</span>
-                  <span className="text-slate-300">${quote.distancePrice}.00</span>
+                  <span className="text-slate-500">Distance ({distanceInfo.totalMiles.toFixed(1)} mi × $2)</span>
+                  <span className="text-slate-700">${quote.distancePrice}.00</span>
                 </div>
               </div>
             )}
             <div className="flex justify-between items-center mb-1">
-              <span className="text-slate-400 text-sm">Estimated Total</span>
-              <span className="text-2xl font-bold">${quote.price}.00</span>
+              <span className="text-slate-500 text-sm">Estimated Total</span>
+              <span className="text-2xl font-bold text-slate-800">${quote.price}.00</span>
             </div>
             <div className="text-xs text-slate-500 text-right">Includes taxes & fees</div>
           </div>
 
-          <div className="flex items-start gap-3 text-xs text-slate-400 bg-slate-800/50 p-3 rounded-lg border border-slate-700">
+          <div className="flex items-start gap-3 text-xs text-blue-600 bg-blue-50 p-3 rounded-lg border border-blue-100">
             <Info size={16} className="flex-shrink-0 mt-0.5" />
             <p>
               Final price may vary based on exact volumetric weight measured at the hub.
@@ -873,7 +873,7 @@ export const PlaceOrderView: React.FC<{ currentUser?: User | null }> = ({ curren
 
             <div className="p-6 bg-slate-50/50 border-t border-slate-100 flex gap-3">
               <button
-                onClick={() => setShowPayment(true)}
+                onClick={() => setShowPayment(false)}
                 className="flex-1 py-3 text-slate-600 font-bold hover:bg-slate-200 rounded-xl transition-colors"
               >
                 Cancel

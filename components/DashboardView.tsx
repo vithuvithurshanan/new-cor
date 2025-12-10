@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { DashboardStats, User, PricingConfig, Shipment, ShipmentStatus } from '../types';
+import { DashboardStats, User, PricingConfig, Shipment, ShipmentStatus, UserRole } from '../types';
 import { generateLogisticsReport, optimizePricingRules, generateNotificationTemplate } from '../services/geminiService';
 import { mockDataService } from '../services/mockDataService';
 import { TrendingUp, Package, AlertTriangle, CheckCircle, Sparkles, Loader2, Users, CreditCard, Bell, Search, Sliders, DollarSign, FileText, Server, Globe, Shield, Database, Activity, Wifi, Cpu, MessageSquare, ArrowRight, Filter } from 'lucide-react';
@@ -26,8 +26,14 @@ const INITIAL_PRICING: PricingConfig = {
 
 type AdminTab = 'OVERVIEW' | 'USERS' | 'ORDERS' | 'NOTIFICATIONS' | 'SYSTEM';
 
-export const DashboardView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<AdminTab>('OVERVIEW');
+interface DashboardViewProps {
+  initialTab?: AdminTab;
+  roleFilter?: UserRole;
+  orderFilter?: ShipmentStatus;
+}
+
+export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'OVERVIEW', roleFilter, orderFilter: initialOrderFilter }) => {
+  const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
   const [loadingAi, setLoadingAi] = useState(false);
 
   // Data States
@@ -43,7 +49,7 @@ export const DashboardView: React.FC = () => {
   const [notifTemplate, setNotifTemplate] = useState('');
 
   // -- ORDER MANAGEMENT STATES --
-  const [orderFilter, setOrderFilter] = useState<ShipmentStatus | 'ALL'>('ALL');
+  const [orderFilter, setOrderFilter] = useState<ShipmentStatus | 'ALL'>(initialOrderFilter || 'ALL');
 
   // -- MODAL STATES --
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -204,83 +210,89 @@ export const DashboardView: React.FC = () => {
     </div>
   );
 
-  const renderUserManagement = () => (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">User Management</h2>
-          <p className="text-slate-500">Manage customers, riders, and staff.</p>
-        </div>
-        <div className="flex gap-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
-            <input type="text" placeholder="Search users..." className="pl-10 pr-4 py-2 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none" />
-          </div>
-          <button
-            onClick={handleAddUser}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-medium shadow-md hover:bg-indigo-700"
-          >
-            + Add User
-          </button>
-        </div>
-      </div>
 
-      <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-sm border border-white/60 overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50/80 border-b border-slate-100">
-            <tr>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">User</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Role</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Status</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {users.map(user => (
-              <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">
-                      {user.name.charAt(0)}
+  const renderUserManagement = () => {
+    const filteredUsers = roleFilter ? users.filter(u => u.role === roleFilter) : users;
+    const title = roleFilter ? `${roleFilter.charAt(0) + roleFilter.slice(1).toLowerCase().replace('_', ' ')} Management` : 'User Management';
+
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-800">{title}</h2>
+            <p className="text-slate-500">Manage {roleFilter ? roleFilter.toLowerCase().replace('_', ' ') + 's' : 'customers, riders, and staff'}.</p>
+          </div>
+          <div className="flex gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
+              <input type="text" placeholder="Search users..." className="pl-10 pr-4 py-2 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none" />
+            </div>
+            <button
+              onClick={handleAddUser}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-medium shadow-md hover:bg-indigo-700"
+            >
+              + Add User
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-sm border border-white/60 overflow-hidden">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50/80 border-b border-slate-100">
+              <tr>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">User</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Role</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Status</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredUsers.map(user => (
+                <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">
+                        {user.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-800">{user.name}</p>
+                        <p className="text-xs text-slate-500">{user.email}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-slate-800">{user.name}</p>
-                      <p className="text-xs text-slate-500">{user.email}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wide
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wide
                     ${user.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' :
-                      user.role === 'RIDER' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}
+                        user.role === 'RIDER' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}
                   `}>
-                    {user.role.replace('_', ' ')}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <span className={`flex items-center gap-1.5 text-xs font-medium
+                      {user.role.replace('_', ' ')}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`flex items-center gap-1.5 text-xs font-medium
                     ${user.status === 'ACTIVE' ? 'text-emerald-600' : 'text-slate-400'}
                   `}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${user.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
-                    {user.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <button
-                    onClick={() => handleViewUser(user)}
-                    className="text-slate-400 hover:text-indigo-600 transition-colors"
-                    title="View/Edit User"
-                  >
-                    <MessageSquare size={18} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                      <span className={`w-1.5 h-1.5 rounded-full ${user.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                      {user.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <button
+                      onClick={() => handleViewUser(user)}
+                      className="text-slate-400 hover:text-indigo-600 transition-colors"
+                      title="View/Edit User"
+                    >
+                      <MessageSquare size={18} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderOrderManagement = () => {
     const filteredShipments = orderFilter === 'ALL'
@@ -447,20 +459,9 @@ export const DashboardView: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-8 h-[calc(100vh-6rem)]">
-      {/* Sidebar for Dashboard */}
-      <div className="w-full lg:w-64 flex-shrink-0 space-y-2 overflow-y-auto pr-2 custom-scrollbar pb-4">
-        <DashboardTab id="OVERVIEW" label="Overview" icon={Activity} active={activeTab} onClick={setActiveTab} />
-        <div className="h-px bg-slate-200/50 my-2"></div>
-        <DashboardTab id="USERS" label="User Management" icon={Users} active={activeTab} onClick={setActiveTab} />
-        <DashboardTab id="ORDERS" label="Shipments & Orders" icon={FileText} active={activeTab} onClick={setActiveTab} />
-        <DashboardTab id="NOTIFICATIONS" label="Notifications AI" icon={Bell} active={activeTab} onClick={setActiveTab} />
-        <div className="h-px bg-slate-200/50 my-2"></div>
-        <DashboardTab id="SYSTEM" label="System Status" icon={Server} active={activeTab} onClick={setActiveTab} />
-      </div>
-
+    <div className="h-full">
       {/* Main Content */}
-      <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar pb-10">
+      <div className="h-full overflow-y-auto pr-2 custom-scrollbar pb-10">
         {renderContent()}
       </div>
 

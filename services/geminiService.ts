@@ -5,7 +5,7 @@ import { Shipment, DashboardStats, PricingConfig } from "../types";
 const getClient = () => {
   // Safe access to process.env for browser environments
   const apiKey = (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : undefined;
-  
+
   if (!apiKey) {
     console.warn("API_KEY is missing. AI features will strictly mock responses if not handled.");
   }
@@ -15,7 +15,7 @@ const getClient = () => {
 export const generateLogisticsReport = async (stats: DashboardStats, recentShipments: Shipment[]): Promise<string> => {
   try {
     const ai = getClient();
-    
+
     const prompt = `
       Analyze the following logistics data and provide a concise executive summary (max 150 words).
       Focus on efficiency, potential risks, and actionable advice.
@@ -162,5 +162,39 @@ export const optimizeHubRouting = async (origin: string, destination: string): P
     return response.text || "Direct Route suggested.";
   } catch (error) {
     return "Route optimization unavailable.";
+  }
+};
+
+export const generateWeeklyBusinessForecast = async (stats?: DashboardStats): Promise<string> => {
+  try {
+    const ai = getClient();
+    const statsContext = stats ? JSON.stringify(stats) : "No specific data provided, assume a standard mid-sized logistics company.";
+
+    const prompt = `
+      Generate a "Weekly Business Forecast & Solutions" report for a logistics company (CourierOS).
+      
+      Context Data:
+      ${statsContext}
+      
+      Structure the response as follows:
+      1. **Revenue Prediction**: Forecast for the upcoming week based on current trends.
+      2. **Operational Risks**: Identify potential bottlenecks (e.g., high driver load, vehicle maintenance).
+      3. **Recommended Solutions**: Actionable steps to mitigate risks and improve efficiency.
+      4. **Strategic Focus**: One key area to focus on this week (e.g., "Customer Retention" or "Route Optimization").
+      
+      Keep it professional, insightful, and under 200 words.
+    `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        temperature: 0.4,
+      }
+    });
+
+    return response.text || "Unable to generate forecast.";
+  } catch (error) {
+    return "Weekly forecast generation failed. Please try again later.";
   }
 };

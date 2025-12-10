@@ -1,37 +1,42 @@
 /* Enhanced CourierOS Styles */
-:root{
-  --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #ffffff 50%, #eef2ff 100%);
+:root {
+  --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
   --sidebar-width: 320px;
   --sidebar-collapsed-width: 80px;
 }
 
-html,body,#root{
-  height:100%;
-  margin:0;
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-body{
+body {
   background: var(--bg-gradient);
-  -webkit-font-smoothing:antialiased;
-  -moz-osx-font-smoothing:grayscale;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Enhanced Scrollbar */
-.custom-scrollbar::-webkit-scrollbar{
-  width:6px;
-  height:6px;
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
-.custom-scrollbar::-webkit-scrollbar-track{
-  background:transparent;
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
 }
-.custom-scrollbar::-webkit-scrollbar-thumb{
-  background:rgba(148, 163, 184, 0.3);
-  border-radius:999px;
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.5);
+  border-radius: 999px;
   transition: background 0.2s ease;
 }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover{
-  background:rgba(148, 163, 184, 0.6);
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.8);
 }
 
 /* Animations */
@@ -40,6 +45,7 @@ body{
     opacity: 0;
     transform: translateY(-10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -51,6 +57,7 @@ body{
     opacity: 0;
     transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -61,6 +68,7 @@ body{
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -71,6 +79,7 @@ body{
     opacity: 0;
     transform: scale(0.95);
   }
+
   to {
     opacity: 1;
     transform: scale(1);
@@ -103,9 +112,9 @@ body{
 
 /* Glass Effect Utilities */
 .glass-effect {
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
 .glass-dark {
@@ -150,12 +159,29 @@ body{
 }
 
 /* Z-Index Layers */
-.z-sidebar { z-index: 10; }
-.z-header { z-index: 20; }
-.z-modal { z-index: 50; }
-.z-notification { z-index: 9999; }
-.z-notification-backdrop { z-index: 9998; }
-.z-tooltip { z-index: 10000; }
+.z-sidebar {
+  z-index: 10;
+}
+
+.z-header {
+  z-index: 20;
+}
+
+.z-modal {
+  z-index: 50;
+}
+
+.z-notification {
+  z-index: 9999;
+}
+
+.z-notification-backdrop {
+  z-index: 9998;
+}
+
+.z-tooltip {
+  z-index: 10000;
+}
 
 /* Notification Specific */
 .notification-panel {
@@ -174,7 +200,7 @@ body{
   z-index: 99999;
 }
 
-.notification-portal > * {
+.notification-portal>* {
   pointer-events: auto;
 }
 

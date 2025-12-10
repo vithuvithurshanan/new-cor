@@ -19,8 +19,12 @@ const MOCK_MANIFESTS: HubManifest[] = [
 
 type HubTab = 'DASHBOARD' | 'INBOUND' | 'OUTBOUND' | 'INVENTORY' | 'NETWORK';
 
-export const HubView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<HubTab>('DASHBOARD');
+interface HubViewProps {
+  initialTab?: HubTab;
+}
+
+export const HubView: React.FC<HubViewProps> = ({ initialTab = 'DASHBOARD' }) => {
+  const [activeTab, setActiveTab] = useState<HubTab>(initialTab);
   const [hubs, setHubs] = useState<Hub[]>([]);
   const [scanInput, setScanInput] = useState('');
   const [scannedPackage, setScannedPackage] = useState<any>(null);

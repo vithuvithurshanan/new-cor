@@ -12,11 +12,12 @@ import { HubView } from './components/HubView';
 import { LoginView } from './components/LoginView';
 import { ProfileView } from './components/ProfileView';
 import { CustomerOrdersView } from './components/CustomerOrdersView';
+import { CustomerDashboardView } from './components/CustomerDashboardView';
 import PaymentDemo from './components/PaymentDemo';
 import AppHeader from './components/AppHeader';
 import ProfileDropdown from './components/ProfileDropdown';
 import CollapsibleSidebar from './components/CollapsibleSidebar';
-import { LayoutDashboard, PackageSearch, MessageSquareText, Menu, X, Box, Send, Bike, Warehouse, LogOut, User as UserIcon, ListOrdered, Wallet, Truck, Loader2, CreditCard, Settings, Users, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, PackageSearch, MessageSquareText, Menu, X, Box, Send, Bike, Warehouse, LogOut, User as UserIcon, ListOrdered, Wallet, Truck, Loader2, CreditCard, Settings, Users, BarChart3, FileText, Bell, Server, CheckCircle, AlertTriangle, Map, DollarSign } from 'lucide-react';
 import { apiService } from './services/apiService';
 
 const USE_BACKEND = import.meta.env.VITE_USE_BACKEND === 'true';
@@ -60,18 +61,44 @@ const App: React.FC = () => {
 
   const renderView = () => {
     switch (view) {
-      case 'DASHBOARD': return <DashboardView />;
+      case 'DASHBOARD': return <DashboardView initialTab="OVERVIEW" />;
+      case 'USER_MANAGEMENT': return <DashboardView initialTab="USERS" />;
+      case 'USERS_CUSTOMERS': return <DashboardView initialTab="USERS" roleFilter="CUSTOMER" />;
+      case 'USERS_RIDERS': return <DashboardView initialTab="USERS" roleFilter="RIDER" />;
+      case 'USERS_ADMINS': return <DashboardView initialTab="USERS" roleFilter="ADMIN" />;
+      case 'USERS_HUB_MANAGERS': return <DashboardView initialTab="USERS" roleFilter="HUB_MANAGER" />;
+      case 'SHIPMENTS': return <DashboardView initialTab="ORDERS" />;
+      case 'SHIPMENTS_PLACED': return <DashboardView initialTab="ORDERS" orderFilter="PLACED" />;
+      case 'SHIPMENTS_PICKUP_ASSIGNED': return <DashboardView initialTab="ORDERS" orderFilter="PICKUP_ASSIGNED" />;
+      case 'SHIPMENTS_IN_TRANSIT': return <DashboardView initialTab="ORDERS" orderFilter="IN_TRANSIT" />;
+      case 'SHIPMENTS_DELIVERED': return <DashboardView initialTab="ORDERS" orderFilter="DELIVERED" />;
+      case 'SHIPMENTS_EXCEPTION': return <DashboardView initialTab="ORDERS" orderFilter="EXCEPTION" />;
+      case 'NOTIFICATIONS': return <DashboardView initialTab="NOTIFICATIONS" />;
+      case 'SYSTEM_STATUS': return <DashboardView initialTab="SYSTEM" />;
       case 'ACCOUNT_DASHBOARD': return <AccountDashboardView />;
-      case 'FLEET_DASHBOARD': return <FleetDashboardView currentUser={user} />;
+      case 'FLEET_DASHBOARD': return <FleetDashboardView currentUser={user} initialTab="OVERVIEW" />;
+      case 'FLEET_OVERVIEW': return <FleetDashboardView currentUser={user} initialTab="OVERVIEW" />;
+      case 'FLEET_RIDER_APP': return <FleetDashboardView currentUser={user} initialTab="RIDER_APP" />;
+      case 'FLEET_TRACKING': return <FleetDashboardView currentUser={user} initialTab="TRACKING" />;
+      case 'FLEET_RIDERS': return <FleetDashboardView currentUser={user} initialTab="RIDERS" />;
       case 'VEHICLE_DASHBOARD': return <VehicleDashboardView />;
+      case 'ACCOUNT_OVERVIEW': return <AccountDashboardView initialTab="OVERVIEW" />;
+      case 'ACCOUNT_GOVERNMENT': return <AccountDashboardView initialTab="GOVERNMENT" />;
+      case 'ACCOUNT_ACTUAL': return <AccountDashboardView initialTab="ACTUAL" />;
+      case 'ACCOUNT_PRICING': return <AccountDashboardView initialTab="PRICING" />;
+      case 'HUB_MANAGER': return <HubView initialTab="DASHBOARD" />;
+      case 'HUB_DASHBOARD': return <HubView initialTab="DASHBOARD" />;
+      case 'HUB_INBOUND': return <HubView initialTab="INBOUND" />;
+      case 'HUB_OUTBOUND': return <HubView initialTab="OUTBOUND" />;
+      case 'HUB_INVENTORY': return <HubView initialTab="INVENTORY" />;
+      case 'HUB_NETWORK': return <HubView initialTab="NETWORK" />;
       case 'TRACKING': return <TrackingView currentUser={user} />;
       case 'NEW_SHIPMENT': return <PlaceOrderView currentUser={user} />;
-      case 'AI_ASSISTANT': return <AssistantView />;
+      case 'AI_ASSISTANT': return <AssistantView currentUser={user} />;
       case 'RIDER': return <RiderView currentUser={user} />;
-      case 'HUB_MANAGER': return <HubView />;
       case 'PROFILE': return <ProfileView currentUser={user} />;
       case 'MY_ORDERS': return <CustomerOrdersView currentUser={user} />;
-      case 'PAYMENT_DEMO': return <PaymentDemo />;
+      case 'CUSTOMER_DASHBOARD': return <CustomerDashboardView currentUser={user} />;
       default: return <TrackingView currentUser={user} />;
     }
   };
@@ -88,6 +115,13 @@ const App: React.FC = () => {
   // Menu Structure for Collapsible Sidebar
   const menuItems = [
     // Customer Section
+    {
+      id: 'CUSTOMER_DASHBOARD' as ViewState,
+      icon: LayoutDashboard,
+      label: 'Dashboard',
+      roles: ['CUSTOMER'] as UserRole[],
+      strict: true
+    },
     {
       id: 'NEW_SHIPMENT' as ViewState,
       icon: Send,
@@ -114,12 +148,6 @@ const App: React.FC = () => {
       label: 'Smart Assistant',
       roles: ['CUSTOMER'] as UserRole[]
     },
-    {
-      id: 'PAYMENT_DEMO' as ViewState,
-      icon: CreditCard,
-      label: 'Payment Demo',
-      roles: ['CUSTOMER', 'ADMIN'] as UserRole[]
-    },
 
     // Rider Section
     {
@@ -143,10 +171,124 @@ const App: React.FC = () => {
           roles: ['ADMIN', 'FINANCE', 'SUPPORT'] as UserRole[]
         },
         {
+          id: 'USER_MANAGEMENT' as ViewState,
+          icon: Users,
+          label: 'User Management',
+          roles: ['ADMIN'] as UserRole[],
+          children: [
+            {
+              id: 'USER_MANAGEMENT' as ViewState,
+              icon: Users,
+              label: 'All Users',
+              roles: ['ADMIN'] as UserRole[]
+            },
+            {
+              id: 'USERS_CUSTOMERS' as ViewState,
+              icon: UserIcon,
+              label: 'Customers',
+              roles: ['ADMIN'] as UserRole[]
+            },
+            {
+              id: 'USERS_RIDERS' as ViewState,
+              icon: Bike,
+              label: 'Riders',
+              roles: ['ADMIN'] as UserRole[]
+            },
+            {
+              id: 'USERS_HUB_MANAGERS' as ViewState,
+              icon: Warehouse,
+              label: 'Hub Managers',
+              roles: ['ADMIN'] as UserRole[]
+            },
+            {
+              id: 'USERS_ADMINS' as ViewState,
+              icon: Settings,
+              label: 'Admins',
+              roles: ['ADMIN'] as UserRole[]
+            }
+          ]
+        },
+        {
+          id: 'SHIPMENTS' as ViewState,
+          icon: FileText,
+          label: 'Shipments & Orders',
+          roles: ['ADMIN', 'HUB_MANAGER', 'SUPPORT'] as UserRole[],
+          children: [
+            {
+              id: 'SHIPMENTS' as ViewState,
+              icon: FileText,
+              label: 'All Shipments',
+              roles: ['ADMIN', 'HUB_MANAGER', 'SUPPORT'] as UserRole[]
+            },
+            {
+              id: 'SHIPMENTS_PLACED' as ViewState,
+              icon: PackageSearch,
+              label: 'New Orders',
+              roles: ['ADMIN', 'HUB_MANAGER'] as UserRole[]
+            },
+            {
+              id: 'SHIPMENTS_IN_TRANSIT' as ViewState,
+              icon: Truck,
+              label: 'In Transit',
+              roles: ['ADMIN', 'HUB_MANAGER'] as UserRole[]
+            },
+            {
+              id: 'SHIPMENTS_DELIVERED' as ViewState,
+              icon: CheckCircle, // Need to import CheckCircle
+              label: 'Delivered',
+              roles: ['ADMIN', 'HUB_MANAGER'] as UserRole[]
+            },
+            {
+              id: 'SHIPMENTS_EXCEPTION' as ViewState,
+              icon: AlertTriangle, // Need to import AlertTriangle
+              label: 'Exceptions',
+              roles: ['ADMIN', 'HUB_MANAGER'] as UserRole[]
+            }
+          ]
+        },
+        {
+          id: 'NOTIFICATIONS' as ViewState,
+          icon: Bell,
+          label: 'Notifications AI',
+          roles: ['ADMIN', 'SUPPORT'] as UserRole[]
+        },
+        {
+          id: 'SYSTEM_STATUS' as ViewState,
+          icon: Server,
+          label: 'System Status',
+          roles: ['ADMIN'] as UserRole[]
+        },
+        {
           id: 'FLEET_DASHBOARD' as ViewState,
           icon: Bike,
           label: 'Fleet Management',
-          roles: ['ADMIN', 'HUB_MANAGER'] as UserRole[]
+          roles: ['ADMIN', 'HUB_MANAGER'] as UserRole[],
+          children: [
+            {
+              id: 'FLEET_OVERVIEW' as ViewState,
+              icon: LayoutDashboard,
+              label: 'Overview',
+              roles: ['ADMIN', 'HUB_MANAGER'] as UserRole[]
+            },
+            {
+              id: 'FLEET_TRACKING' as ViewState,
+              icon: Map, // Need to import Map
+              label: 'Live Tracking',
+              roles: ['ADMIN', 'HUB_MANAGER'] as UserRole[]
+            },
+            {
+              id: 'FLEET_RIDERS' as ViewState,
+              icon: Users,
+              label: 'Riders',
+              roles: ['ADMIN', 'HUB_MANAGER'] as UserRole[]
+            },
+            {
+              id: 'FLEET_RIDER_APP' as ViewState,
+              icon: Bike,
+              label: 'Rider App View',
+              roles: ['ADMIN', 'HUB_MANAGER'] as UserRole[]
+            }
+          ]
         },
         {
           id: 'VEHICLE_DASHBOARD' as ViewState,
@@ -155,16 +297,74 @@ const App: React.FC = () => {
           roles: ['ADMIN', 'HUB_MANAGER'] as UserRole[]
         },
         {
-          id: 'ACCOUNT_DASHBOARD' as ViewState,
-          icon: Wallet,
-          label: 'Account Dashboard',
-          roles: ['ADMIN', 'FINANCE'] as UserRole[]
-        },
-        {
           id: 'HUB_MANAGER' as ViewState,
           icon: Warehouse,
           label: 'Hub Management',
-          roles: ['ADMIN', 'HUB_MANAGER', 'HUB_STAFF'] as UserRole[]
+          roles: ['ADMIN', 'HUB_MANAGER'] as UserRole[],
+          children: [
+            {
+              id: 'HUB_DASHBOARD' as ViewState,
+              icon: BarChart3,
+              label: 'Overview',
+              roles: ['ADMIN', 'HUB_MANAGER'] as UserRole[]
+            },
+            {
+              id: 'HUB_INBOUND' as ViewState,
+              icon: PackageSearch, // Reusing PackageSearch for Scan
+              label: 'Inbound Scan',
+              roles: ['ADMIN', 'HUB_MANAGER'] as UserRole[]
+            },
+            {
+              id: 'HUB_OUTBOUND' as ViewState,
+              icon: Truck,
+              label: 'Outbound',
+              roles: ['ADMIN', 'HUB_MANAGER'] as UserRole[]
+            },
+            {
+              id: 'HUB_INVENTORY' as ViewState,
+              icon: Warehouse,
+              label: 'Storage',
+              roles: ['ADMIN', 'HUB_MANAGER'] as UserRole[]
+            },
+            {
+              id: 'HUB_NETWORK' as ViewState,
+              icon: Map,
+              label: 'Hub Network',
+              roles: ['ADMIN', 'HUB_MANAGER'] as UserRole[]
+            }
+          ]
+        },
+        {
+          id: 'ACCOUNT_DASHBOARD' as ViewState,
+          icon: Wallet,
+          label: 'Account & Finance',
+          roles: ['ADMIN'] as UserRole[],
+          children: [
+            {
+              id: 'ACCOUNT_OVERVIEW' as ViewState,
+              icon: BarChart3,
+              label: 'Financial Overview',
+              roles: ['ADMIN'] as UserRole[]
+            },
+            {
+              id: 'ACCOUNT_GOVERNMENT' as ViewState,
+              icon: FileText, // Using FileText for Reports
+              label: 'Government Reports',
+              roles: ['ADMIN'] as UserRole[]
+            },
+            {
+              id: 'ACCOUNT_ACTUAL' as ViewState,
+              icon: BarChart3, // Using BarChart3 for Actual Reports
+              label: 'Actual Reports',
+              roles: ['ADMIN'] as UserRole[]
+            },
+            {
+              id: 'ACCOUNT_PRICING' as ViewState,
+              icon: DollarSign, // Need to import DollarSign
+              label: 'Smart Pricing',
+              roles: ['ADMIN'] as UserRole[]
+            }
+          ]
         }
       ]
     }
@@ -176,9 +376,9 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen font-sans bg-gradient-to-br from-slate-50 via-white to-indigo-50">
+    <div className="flex min-h-screen font-sans text-slate-900 bg-slate-50 selection:bg-indigo-100">
       {/* Enhanced Sidebar - Desktop */}
-      <aside className={`hidden lg:flex flex-col bg-white/80 backdrop-blur-xl border-r border-white/50 fixed h-full z-10 shadow-xl shadow-slate-200/50 transition-all duration-300 ${sidebarCollapsed ? 'w-20' : 'w-80'}`}>
+      <aside className={`hidden lg:flex flex-col bg-white/80 backdrop-blur-xl border-r border-slate-200 fixed h-full z-10 shadow-xl shadow-slate-200/50 transition-all duration-300 ${sidebarCollapsed ? 'w-20' : 'w-80'}`}>
         {/* Header */}
         <div className="p-6 border-b border-slate-100">
           <div className="flex items-center gap-3">
@@ -193,7 +393,7 @@ const App: React.FC = () => {
             )}
             <button
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600"
             >
               <Menu size={18} />
             </button>
@@ -201,12 +401,13 @@ const App: React.FC = () => {
         </div>
 
         {/* Navigation */}
-        <div className="flex-1 p-4">
+        <div className="flex-1 p-4 min-h-0 flex flex-col overflow-hidden">
           <CollapsibleSidebar
             menuItems={menuItems}
             currentView={view}
             hasAccess={hasAccess}
             onNavigate={handleNavigation}
+            isCollapsed={sidebarCollapsed}
           />
         </div>
 
@@ -216,12 +417,13 @@ const App: React.FC = () => {
             user={user}
             onProfileClick={() => setView('PROFILE')}
             onLogout={handleLogout}
+            isCollapsed={sidebarCollapsed}
           />
         </div>
       </aside>
 
       {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 w-full bg-white/90 backdrop-blur-xl border-b border-white/50 z-50 px-4 py-3 flex items-center justify-between shadow-sm">
+      <div className="lg:hidden fixed top-0 w-full bg-white/90 backdrop-blur-xl border-b border-slate-200 z-50 px-4 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">
           <div className="bg-indigo-600 p-1.5 rounded-lg text-white">
             <Box size={20} strokeWidth={3} />
@@ -229,10 +431,10 @@ const App: React.FC = () => {
           <span className="text-lg font-bold text-slate-800">CourierOS</span>
         </div>
         <div className="flex items-center gap-2">
-          <button className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg">
+          <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg">
             <PackageSearch size={20} />
           </button>
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg">
+          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg">
             {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
         </div>
@@ -266,7 +468,7 @@ const App: React.FC = () => {
       <div className={`flex-1 transition-all duration-300 ${sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-80'}`}>
         {/* Enhanced Header */}
         <AppHeader user={user} currentView={view} />
-        
+
         {/* Page Content */}
         <main className="p-6">
           <div className="max-w-7xl mx-auto">

@@ -7,12 +7,13 @@ import { LayoutDashboard, Map, Bike, Users, Activity, CheckCircle, Package, MapP
 
 interface FleetDashboardViewProps {
     currentUser?: User;
+    initialTab?: FleetTab;
 }
 
 type FleetTab = 'OVERVIEW' | 'RIDER_APP' | 'TRACKING' | 'RIDERS';
 
-export const FleetDashboardView: React.FC<FleetDashboardViewProps> = ({ currentUser }) => {
-    const [activeTab, setActiveTab] = useState<FleetTab>('OVERVIEW');
+export const FleetDashboardView: React.FC<FleetDashboardViewProps> = ({ currentUser, initialTab = 'OVERVIEW' }) => {
+    const [activeTab, setActiveTab] = useState<FleetTab>(initialTab);
 
     // Data states
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -399,8 +400,8 @@ const TabButton = ({ active, onClick, icon: Icon, label }: {
     <button
         onClick={onClick}
         className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${active
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-500 hover:bg-slate-100'
+            ? 'bg-indigo-600 text-white shadow-md'
+            : 'text-slate-500 hover:bg-slate-100'
             }`}
     >
         <Icon size={18} />

@@ -10,13 +10,16 @@ The backend needs Firebase Admin SDK credentials to access Firestore database.
    https://console.firebase.google.com/project/chat-app-6dfa7/settings/serviceaccounts/adminsdk
 
 2. **Generate Service Account Key:**
+
    - Click "Generate New Private Key"
    - Click "Generate Key" in the dialog
    - A JSON file will download
 
 3. **Save the File:**
+
    - Rename it to `serviceAccountKey.json`
    - Move it to the `backend/` folder
+
    ```bash
    mv ~/Downloads/chat-app-6dfa7-*.json backend/serviceAccountKey.json
    ```
@@ -30,6 +33,7 @@ The backend needs Firebase Admin SDK credentials to access Firestore database.
 ### Verify It's Working:
 
 You should see:
+
 ```
 ✓ Server running on port 3001
 ✓ Connected to Firestore

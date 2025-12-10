@@ -94,7 +94,7 @@ export const NotificationCenter: React.FC = () => {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const markAsRead = (id: string) => {
-    setNotifications((prev: Notification[]) => 
+    setNotifications((prev: Notification[]) =>
       prev.map((n: Notification) => n.id === id ? { ...n, read: true } : n)
     );
   };
@@ -136,11 +136,11 @@ export const NotificationCenter: React.FC = () => {
             style={{ zIndex: 99998 }}
             onClick={() => setIsOpen(false)}
           />
-          
+
           {/* Notification Panel */}
-          <div 
+          <div
             className="fixed w-80 bg-white/98 backdrop-blur-xl rounded-2xl notification-panel max-h-96 overflow-hidden animate-in slide-in-from-top-2 duration-200 shadow-2xl"
-            style={{ 
+            style={{
               zIndex: 99999,
               top: buttonRect ? buttonRect.bottom + 8 : 60,
               right: buttonRect ? window.innerWidth - buttonRect.right : 20,
@@ -183,9 +183,8 @@ export const NotificationCenter: React.FC = () => {
                   <div
                     key={notification.id}
                     onClick={() => markAsRead(notification.id)}
-                    className={`p-4 border-b border-slate-50 hover:bg-slate-50/50 cursor-pointer transition-colors ${
-                      !notification.read ? 'bg-blue-50/30' : ''
-                    }`}
+                    className={`p-4 border-b border-slate-50 hover:bg-slate-50/50 cursor-pointer transition-colors ${!notification.read ? 'bg-blue-50/30' : ''
+                      }`}
                   >
                     <div className="flex items-start gap-3">
                       <div className={`p-2 rounded-lg ${getTypeColor(notification.type)}`}>

@@ -1,18 +1,19 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  getDoc, 
-  getDocs, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  where, 
-  orderBy, 
+import {
+  collection,
+  doc,
+  addDoc,
+  getDoc,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
   limit,
   onSnapshot,
   serverTimestamp,
-  Timestamp
+  Timestamp,
+  setDoc
 } from 'firebase/firestore';
 import { db } from '../firebaseClient';
 import { Shipment, User, Vehicle, Hub, RiderTask } from '../types';
@@ -37,7 +38,7 @@ export class FirebaseService {
     try {
       const docRef = doc(db, collectionName, docId);
       const docSnap = await getDoc(docRef);
-      
+
       if (docSnap.exists()) {
         return { id: docSnap.id, ...docSnap.data() } as T;
       }
@@ -85,29 +86,29 @@ export class FirebaseService {
 
   // Query with conditions
   async queryDocuments<T>(
-    collectionName: string, 
+    collectionName: string,
     conditions: Array<{ field: string; operator: any; value: any }> = [],
     orderByField?: string,
     limitCount?: number
   ): Promise<T[]> {
     try {
       let q = collection(db, collectionName);
-      
+
       // Apply where conditions
       conditions.forEach(condition => {
         q = query(q, where(condition.field, condition.operator, condition.value));
       });
-      
+
       // Apply ordering
       if (orderByField) {
         q = query(q, orderBy(orderByField, 'desc'));
       }
-      
+
       // Apply limit
       if (limitCount) {
         q = query(q, limit(limitCount));
       }
-      
+
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
@@ -121,16 +122,16 @@ export class FirebaseService {
 
   // Real-time listener
   subscribeToCollection<T>(
-    collectionName: string, 
+    collectionName: string,
     callback: (data: T[]) => void,
     conditions: Array<{ field: string; operator: any; value: any }> = []
   ): () => void {
     let q = collection(db, collectionName);
-    
+
     conditions.forEach(condition => {
       q = query(q, where(condition.field, condition.operator, condition.value));
     });
-    
+
     return onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -162,13 +163,25 @@ export class FirebaseService {
   async updateShipmentStatus(shipmentId: string, status: string, location?: string): Promise<void> {
     const updateData: any = { currentStatus: status };
     if (location) updateData.location = location;
-    
+
     return this.updateDocument<Shipment>('shipments', shipmentId, updateData);
   }
 
   // User-specific methods
-  async addUser(user: Omit<User, 'id'>): Promise<string> {
-    return this.addDocument<User>('users', user);
+  async addUser(user: User): Promise<string> {
+    try {
+      // Use the user's ID (from Firebase Auth) as the document ID
+      const userRef = doc(db, 'users', user.id);
+      await setDoc(userRef, {
+        ...user,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      return user.id;
+    } catch (error) {
+      console.error('Error adding user to Firestore:', error);
+      throw error;
+    }
   }
 
   async getUser(userId: string): Promise<User | null> {

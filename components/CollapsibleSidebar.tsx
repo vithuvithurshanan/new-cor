@@ -17,6 +17,7 @@ interface CollapsibleMenuItemProps {
   hasAccess: (roles: UserRole[], strict?: boolean) => boolean;
   onNavigate: (view: ViewState) => void;
   level?: number;
+  isCollapsed?: boolean;
 }
 
 export const CollapsibleMenuItem: React.FC<CollapsibleMenuItemProps> = ({
@@ -24,10 +25,11 @@ export const CollapsibleMenuItem: React.FC<CollapsibleMenuItemProps> = ({
   currentView,
   hasAccess,
   onNavigate,
-  level = 0
+  level = 0,
+  isCollapsed = false
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  
+
   if (!hasAccess(item.roles, item.strict)) return null;
 
   const hasChildren = item.children && item.children.length > 0;
@@ -48,15 +50,17 @@ export const CollapsibleMenuItem: React.FC<CollapsibleMenuItemProps> = ({
         onClick={handleClick}
         className={`
           w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium duration-200
-          ${level > 0 ? 'ml-4' : ''}
+          ${level > 0 && !isCollapsed ? 'ml-4' : ''}
           ${isActive
             ? 'bg-indigo-600/90 text-white shadow-lg shadow-indigo-200 backdrop-blur-sm'
-            : 'text-slate-500 hover:bg-white/50 hover:text-indigo-600'}
+            : 'text-slate-500 hover:bg-slate-100 hover:text-indigo-600'}
+          ${isCollapsed ? 'justify-center' : ''}
         `}
+        title={isCollapsed ? item.label : undefined}
       >
-        <Icon size={20} />
-        <span className="flex-1 text-left">{item.label}</span>
-        {hasChildren && (
+        <Icon size={24} />
+        {!isCollapsed && <span className="flex-1 text-left">{item.label}</span>}
+        {!isCollapsed && hasChildren && (
           <div className="transition-transform duration-200">
             {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
           </div>
@@ -65,7 +69,7 @@ export const CollapsibleMenuItem: React.FC<CollapsibleMenuItemProps> = ({
 
       {/* Children */}
       {hasChildren && isExpanded && (
-        <div className="mt-1 space-y-1 animate-in slide-in-from-top-2 duration-200">
+        <div className={`mt-1 ml-4 space-y-1 border-l-2 border-slate-200 pl-2 animate-in slide-in-from-top-2 duration-200 ${isCollapsed ? 'hidden' : ''}`}>
           {item.children!.map((child) => (
             <CollapsibleMenuItem
               key={child.id}
@@ -74,6 +78,7 @@ export const CollapsibleMenuItem: React.FC<CollapsibleMenuItemProps> = ({
               hasAccess={hasAccess}
               onNavigate={onNavigate}
               level={level + 1}
+              isCollapsed={isCollapsed}
             />
           ))}
         </div>
@@ -87,16 +92,18 @@ interface CollapsibleSidebarProps {
   currentView: ViewState;
   hasAccess: (roles: UserRole[], strict?: boolean) => boolean;
   onNavigate: (view: ViewState) => void;
+  isCollapsed?: boolean;
 }
 
 export const CollapsibleSidebar: React.FC<CollapsibleSidebarProps> = ({
   menuItems,
   currentView,
   hasAccess,
-  onNavigate
+  onNavigate,
+  isCollapsed = false
 }) => {
   return (
-    <nav className="space-y-2 flex-1 overflow-y-auto pr-1 custom-scrollbar">
+    <nav className="space-y-2 h-full overflow-y-auto pr-1 custom-scrollbar pb-20">
       {menuItems.map((item) => (
         <CollapsibleMenuItem
           key={item.id}
@@ -104,6 +111,7 @@ export const CollapsibleSidebar: React.FC<CollapsibleSidebarProps> = ({
           currentView={currentView}
           hasAccess={hasAccess}
           onNavigate={onNavigate}
+          isCollapsed={isCollapsed}
         />
       ))}
     </nav>
