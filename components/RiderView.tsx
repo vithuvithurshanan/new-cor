@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { RiderTask, RiderTaskStatus, RiderEarnings, User, PackageAssignment, Shipment } from '../types';
+import { RiderTask, RiderTaskStatus, RiderEarnings, User, PackageAssignment, Shipment, ShipmentStatus } from '../types';
 import { mockDataService } from '../services/mockDataService';
 import { MapPin, Navigation, Package, Camera, CheckCircle, XCircle, DollarSign, Calendar, ChevronRight, Upload, Truck, User as UserIcon, Lock, QrCode, Scan } from 'lucide-react';
 import { RiderMap } from './RiderMap';
+import { RiderHistoryList } from './RiderHistoryList';
 
 interface RiderViewProps {
   currentUser: User | null;
@@ -16,7 +17,7 @@ const MOCK_EARNINGS: RiderEarnings = {
 };
 
 export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
-  const [activeTab, setActiveTab] = useState<'TASKS' | 'PACKAGES' | 'EARNINGS'>('TASKS');
+  const [activeTab, setActiveTab] = useState<'TASKS' | 'PACKAGES' | 'EARNINGS' | 'HISTORY'>('TASKS');
   const [tasks, setTasks] = useState<RiderTask[]>([]);
   const [selectedTask, setSelectedTask] = useState<RiderTask | null>(null);
   const [isPodModalOpen, setIsPodModalOpen] = useState(false);
@@ -36,24 +37,54 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
   const isRider = currentUser?.role === 'RIDER';
 
   useEffect(() => {
+    let unsubscribe: () => void;
+
     const loadTasks = async () => {
-      const data = await mockDataService.getRiderTasks();
-      setTasks(data);
+      try {
+        const { firebaseService } = await import('../services/firebaseService');
+
+        // Use real-time subscription
+        unsubscribe = firebaseService.subscribeToCollection<RiderTask>(
+          'riderTasks',
+          (data) => setTasks(data),
+          currentUser?.id ? [{ field: 'riderId', operator: '==', value: currentUser.id }] : []
+        );
+      } catch (error) {
+        console.error('Firestore error, using mock data:', error);
+        const data = await mockDataService.getRiderTasks(currentUser?.id);
+        setTasks(data);
+      }
     };
 
     const loadPackages = async () => {
       if (currentUser?.id) {
-        const packageData = await mockDataService.getPackageAssignments(currentUser.id);
-        setPackages(packageData);
+        try {
+          const { firebaseService } = await import('../services/firebaseService');
+          const [packageData, shipmentData] = await Promise.all([
+            firebaseService.queryDocuments<PackageAssignment>('packageAssignments', []),
+            firebaseService.queryDocuments<Shipment>('shipments', [])
+          ]);
 
-        // Load shipment details for each package
-        const shipmentData = await mockDataService.getShipments();
-        setShipments(shipmentData);
+          // Filter packages for current rider
+          const riderPackages = packageData.filter(p => p.riderId === currentUser.id);
+          setPackages(riderPackages);
+          setShipments(shipmentData);
+        } catch (error) {
+          console.error('Firestore error, using mock data:', error);
+          const packageData = await mockDataService.getPackageAssignments(currentUser.id);
+          setPackages(packageData);
+          const shipmentData = await mockDataService.getShipments();
+          setShipments(shipmentData);
+        }
       }
     };
 
     loadTasks();
     loadPackages();
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [currentUser]);
 
   // Filter tasks for the list view
@@ -65,14 +96,78 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
     // Prevent non-riders from updating logic, just in case
     if (!isRider) return;
 
-    await mockDataService.updateTaskStatus(id, newStatus);
+    try {
+      const { firebaseService } = await import('../services/firebaseService');
+      await firebaseService.updateDocument('riderTasks', id, { status: newStatus });
 
-    // Refresh local state
-    const updatedTasks = await mockDataService.getRiderTasks();
-    setTasks(updatedTasks);
+      // Notify Customer
+      const task = tasks.find(t => t.id === id);
+      if (task && task.shipmentId) {
+        const shipment = shipments.find(s => s.id === task.shipmentId);
+        if (shipment) {
+          let title = '';
+          let message = '';
 
-    if (selectedTask && selectedTask.id === id) {
-      setSelectedTask({ ...selectedTask, status: newStatus });
+          if (newStatus === 'IN_PROGRESS') {
+            title = 'Rider on the way';
+            message = `Rider is heading to ${task.type === 'PICKUP' ? 'pickup' : 'deliver'} your package.`;
+          } else if (newStatus === 'COMPLETED') {
+            title = task.type === 'PICKUP' ? 'Package Picked Up' : 'Package Delivered';
+            message = task.type === 'PICKUP' ? 'Your package has been picked up.' : 'Your package has been delivered.';
+          }
+
+          if (title) {
+            await firebaseService.addNotification({
+              userId: shipment.customerId,
+              title,
+              message,
+              type: 'INFO',
+              read: false,
+              relatedId: shipment.id
+            });
+          }
+
+          // Sync Shipment Status
+          let newShipmentStatus: ShipmentStatus | undefined;
+
+          if (task.type === 'PICKUP') {
+            if (newStatus === 'COMPLETED') newShipmentStatus = 'PICKED' as ShipmentStatus; // Use string literal if enum import is tricky, or import ShipmentStatus
+          } else if (task.type === 'DELIVERY') {
+            if (newStatus === 'IN_PROGRESS') newShipmentStatus = 'OUT_FOR_DELIVERY' as ShipmentStatus;
+            if (newStatus === 'COMPLETED') newShipmentStatus = 'DELIVERED' as ShipmentStatus;
+          }
+
+          if (newShipmentStatus) {
+            await firebaseService.updateShipmentStatus(shipment.id, newShipmentStatus);
+          }
+
+          // SMART ASSIGNMENT LOGIC
+          // If a rider completes a PICKUP, check for other shipments in the same area
+          if (task.type === 'PICKUP' && newStatus === 'COMPLETED') {
+            const assignedCount = await firebaseService.assignRouteShipments(currentUser.id, shipment.id);
+            if (assignedCount > 0) {
+              // We can't easily use toast here without context, but we can rely on the notification created by the service
+              // or we could trigger a local state update to show a message
+              console.log(`Smart Assignment: ${assignedCount} new shipments assigned.`);
+            }
+          }
+        }
+      }
+
+      // No need to manually refresh tasks as we have a subscription
+      if (selectedTask && selectedTask.id === id) {
+        setSelectedTask({ ...selectedTask, status: newStatus });
+      }
+    } catch (error) {
+      console.error('Failed to update task status:', error);
+      // Fallback to mock data
+      await mockDataService.updateTaskStatus(id, newStatus);
+      const updatedTasks = await mockDataService.getRiderTasks(currentUser?.id);
+      setTasks(updatedTasks);
+
+      if (selectedTask && selectedTask.id === id) {
+        setSelectedTask({ ...selectedTask, status: newStatus });
+      }
     }
   };
 
@@ -97,7 +192,7 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
       <div className="bg-white/95 backdrop-blur-md text-slate-800 p-4 sticky top-0 z-20 shadow-md border-b border-slate-200">
         <div className="flex justify-between items-center mb-4">
           <div className="bg-slate-100 px-3 py-1 rounded-full text-xs font-mono border border-slate-200">
-            ID: {isRider ? 'R-4421' : 'VIEW-ONLY'}
+            ID: {currentUser?.id || 'GUEST'}
           </div>
           <div className="flex items-center gap-4 py-2">
             <div className="w-10 h-10 bg-indigo-500 rounded-full flex items-center justify-center text-white font-bold ring-2 ring-indigo-300">
@@ -140,6 +235,12 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
             className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'EARNINGS' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
           >
             Earnings
+          </button>
+          <button
+            onClick={() => setActiveTab('HISTORY')}
+            className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'HISTORY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+          >
+            History
           </button>
         </div>
       </div>
@@ -232,6 +333,15 @@ export const RiderView: React.FC<RiderViewProps> = ({ currentUser }) => {
                 </div>
               )}
             </div>
+          </div>
+        ) : activeTab === 'HISTORY' ? (
+          <div className="p-4">
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 ml-1">Completed Shipments</h3>
+            <RiderHistoryList shipments={shipments.filter(s =>
+              // Filter for shipments assigned to this rider and are completed/delivered
+              (s.riderId === currentUser?.id || tasks.some(t => t.shipmentId === s.id && t.riderId === currentUser?.id)) &&
+              (s.currentStatus === 'DELIVERED' || s.currentStatus === 'PICKED')
+            )} />
           </div>
         ) : (
           <EarningsView stats={MOCK_EARNINGS} />

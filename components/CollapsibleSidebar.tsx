@@ -28,7 +28,12 @@ export const CollapsibleMenuItem: React.FC<CollapsibleMenuItemProps> = ({
   level = 0,
   isCollapsed = false
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  // Auto-expand if current view is one of the children
+  const shouldAutoExpand = item.children?.some(child =>
+    child.id === currentView || child.children?.some(grandchild => grandchild.id === currentView)
+  );
+
+  const [isExpanded, setIsExpanded] = useState(shouldAutoExpand || false);
 
   if (!hasAccess(item.roles, item.strict)) return null;
 

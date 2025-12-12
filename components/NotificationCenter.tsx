@@ -1,20 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, X, Package, Truck, AlertCircle, CheckCircle, Clock, Settings } from 'lucide-react';
+import { Bell, X, Package, Truck, AlertCircle, CheckCircle, Clock, Settings, Info } from 'lucide-react';
+import { AppNotification, User } from '../types';
 
-interface Notification {
-  id: string;
-  type: 'info' | 'success' | 'warning' | 'error';
-  title: string;
-  message: string;
-  timestamp: string;
-  read: boolean;
-  icon?: React.ReactNode;
+interface NotificationCenterProps {
+  currentUser: User | null;
 }
 
-export const NotificationCenter: React.FC = () => {
+export const NotificationCenter: React.FC<NotificationCenterProps> = ({ currentUser }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [buttonRect, setButtonRect] = useState<DOMRect | null>(null);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   // Get button position for portal positioning
   const updateButtonPosition = () => {
@@ -43,73 +39,81 @@ export const NotificationCenter: React.FC = () => {
       };
     }
   }, [isOpen]);
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: '1',
-      type: 'success',
-      title: 'Package Delivered',
-      message: 'Your package TRK001 has been delivered successfully',
-      timestamp: '2 minutes ago',
-      read: false,
-      icon: <CheckCircle size={16} />
-    },
-    {
-      id: '2',
-      type: 'info',
-      title: 'New Order Assigned',
-      message: 'You have been assigned a new delivery task',
-      timestamp: '15 minutes ago',
-      read: false,
-      icon: <Package size={16} />
-    },
-    {
-      id: '3',
-      type: 'warning',
-      title: 'Delivery Delayed',
-      message: 'Package TRK002 delivery has been delayed due to traffic',
-      timestamp: '1 hour ago',
-      read: true,
-      icon: <Clock size={16} />
-    },
-    {
-      id: '4',
-      type: 'info',
-      title: 'Vehicle Maintenance',
-      message: 'Vehicle ABC-123 is scheduled for maintenance tomorrow',
-      timestamp: '2 hours ago',
-      read: true,
-      icon: <Truck size={16} />
-    },
-    {
-      id: '5',
-      type: 'error',
-      title: 'Payment Failed',
-      message: 'Payment for order TRK003 has failed. Please retry.',
-      timestamp: '3 hours ago',
-      read: true,
-      icon: <AlertCircle size={16} />
-    }
-  ]);
+
+  // Fetch notifications
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      if (!currentUser) return;
+      try {
+        const { firebaseService } = await import('../services/firebaseService');
+        const data = await firebaseService.getUserNotifications(currentUser.id);
+        // Sort by date desc
+        const sorted = data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setNotifications(sorted);
+      } catch (error) {
+        console.error('Failed to fetch notifications:', error);
+      }
+    };
+
+    fetchNotifications();
+    // Poll every 30 seconds
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [currentUser]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const markAsRead = (id: string) => {
-    setNotifications((prev: Notification[]) =>
-      prev.map((n: Notification) => n.id === id ? { ...n, read: true } : n)
-    );
+  const markAsRead = async (id: string) => {
+    try {
+      const { firebaseService } = await import('../services/firebaseService');
+      await firebaseService.markNotificationAsRead(id);
+      setNotifications(prev =>
+        prev.map(n => n.id === id ? { ...n, read: true } : n)
+      );
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications((prev: Notification[]) => prev.map((n: Notification) => ({ ...n, read: true })));
+  const markAllAsRead = async () => {
+    try {
+      const { firebaseService } = await import('../services/firebaseService');
+      const unread = notifications.filter(n => !n.read);
+      await Promise.all(unread.map(n => firebaseService.markNotificationAsRead(n.id)));
+
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    } catch (error) {
+      console.error('Failed to mark all as read:', error);
+    }
   };
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case 'success': return 'text-emerald-600 bg-emerald-50';
-      case 'warning': return 'text-amber-600 bg-amber-50';
-      case 'error': return 'text-red-600 bg-red-50';
+      case 'SUCCESS': return 'text-emerald-600 bg-emerald-50';
+      case 'WARNING': return 'text-amber-600 bg-amber-50';
+      case 'ERROR': return 'text-red-600 bg-red-50';
       default: return 'text-blue-600 bg-blue-50';
     }
+  };
+
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'SUCCESS': return <CheckCircle size={16} />;
+      case 'WARNING': return <AlertCircle size={16} />;
+      case 'ERROR': return <AlertCircle size={16} />;
+      default: return <Info size={16} />;
+    }
+  };
+
+  const formatTime = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - date.getTime()) / 60000); // minutes
+
+    if (diff < 1) return 'Just now';
+    if (diff < 60) return `${diff} minutes ago`;
+    if (diff < 1440) return `${Math.floor(diff / 60)} hours ago`;
+    return date.toLocaleDateString();
   };
 
   return (
@@ -131,8 +135,8 @@ export const NotificationCenter: React.FC = () => {
       {isOpen && createPortal(
         <div className="notification-portal">
           {/* Backdrop */}
-          <div 
-            className="fixed inset-0 bg-black/10" 
+          <div
+            className="fixed inset-0 bg-black/10"
             style={{ zIndex: 99998 }}
             onClick={() => setIsOpen(false)}
           />
@@ -179,7 +183,7 @@ export const NotificationCenter: React.FC = () => {
                   <p>No notifications</p>
                 </div>
               ) : (
-                notifications.map((notification: Notification) => (
+                notifications.map((notification: AppNotification) => (
                   <div
                     key={notification.id}
                     onClick={() => markAsRead(notification.id)}
@@ -188,7 +192,7 @@ export const NotificationCenter: React.FC = () => {
                   >
                     <div className="flex items-start gap-3">
                       <div className={`p-2 rounded-lg ${getTypeColor(notification.type)}`}>
-                        {notification.icon}
+                        {getIcon(notification.type)}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
@@ -203,7 +207,7 @@ export const NotificationCenter: React.FC = () => {
                           {notification.message}
                         </p>
                         <p className="text-xs text-slate-400">
-                          {notification.timestamp}
+                          {formatTime(notification.createdAt)}
                         </p>
                       </div>
                     </div>

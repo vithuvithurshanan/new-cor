@@ -1,9 +1,12 @@
+
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { DashboardStats, User, PricingConfig, Shipment, ShipmentStatus, UserRole } from '../types';
 import { generateLogisticsReport, optimizePricingRules, generateNotificationTemplate } from '../services/geminiService';
+import { apiService } from '../services/apiService';
 import { mockDataService } from '../services/mockDataService';
-import { TrendingUp, Package, AlertTriangle, CheckCircle, Sparkles, Loader2, Users, CreditCard, Bell, Search, Sliders, DollarSign, FileText, Server, Globe, Shield, Database, Activity, Wifi, Cpu, MessageSquare, ArrowRight, Filter } from 'lucide-react';
+import { useToast } from './ui/ToastContext';
+import { TrendingUp, Package, AlertTriangle, CheckCircle, Sparkles, Loader2, Users, CreditCard, Bell, Search, Sliders, DollarSign, FileText, Server, Globe, Shield, Database, Activity, Wifi, Cpu, MessageSquare, ArrowRight, Filter, Eye } from 'lucide-react';
 import { ShipmentDetailsModal } from './ShipmentDetailsModal';
 
 const CHART_DATA = [
@@ -60,17 +63,52 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'OVER
   const [newUserForm, setNewUserForm] = useState({ name: '', email: '', phone: '', role: 'CUSTOMER' });
   const [showViewShipmentModal, setShowViewShipmentModal] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
+  const { showToast } = useToast();
+
+  // -- RIDER ASSIGNMENT STATES --
+  const [showAssignRiderModal, setShowAssignRiderModal] = useState(false);
+  const [selectedShipmentForAssignment, setSelectedShipmentForAssignment] = useState<Shipment | null>(null);
+  const [selectedRiderId, setSelectedRiderId] = useState('');
 
   useEffect(() => {
     const loadData = async () => {
-      const dashboardStats = await mockDataService.getDashboardStats();
-      setStats(dashboardStats);
+      try {
+        const { firebaseService } = await import('../services/firebaseService');
 
-      const userList = await mockDataService.getUsers();
-      setUsers(userList);
+        // Load all data from Firestore
+        const [userList, shipmentList] = await Promise.all([
+          firebaseService.queryDocuments<User>('users', []),
+          firebaseService.queryDocuments<Shipment>('shipments', [])
+        ]);
 
-      const shipmentList = await mockDataService.getShipments();
-      setShipments(shipmentList);
+        // Calculate dashboard stats from real data
+        const dashboardStats = {
+          totalShipments: shipmentList.length,
+          activeShipments: shipmentList.filter(s => s.currentStatus !== 'DELIVERED').length,
+          totalRevenue: shipmentList.reduce((sum, s) => sum + (s.price || 0), 0),
+          totalUsers: userList.length,
+          pendingApprovals: shipmentList.filter(s => s.currentStatus === 'PLACED').length,
+          deliveredToday: shipmentList.filter(s => {
+            const today = new Date().toDateString();
+            return s.currentStatus === 'DELIVERED' && new Date(s.updatedAt).toDateString() === today;
+          }).length
+        };
+
+        setStats(dashboardStats);
+        setUsers(userList);
+        setShipments(shipmentList);
+      } catch (error) {
+        console.error('Firestore error, using mock data:', error);
+        showToast('Failed to load data. Using mock data.', 'error');
+        // Fallback to mock data
+        const dashboardStats = await apiService.getDashboardStats();
+        const userList = await apiService.getUsers();
+        const shipmentList = await apiService.getShipments();
+
+        setStats(dashboardStats);
+        setUsers(userList);
+        setShipments(shipmentList);
+      }
     };
     loadData();
   }, []);
@@ -84,7 +122,40 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'OVER
     setLoadingAi(false);
   };
 
+  const handleStatusChange = async (shipmentId: string, newStatus: ShipmentStatus) => {
+    try {
+      const { firebaseService } = await import('../services/firebaseService');
+      await firebaseService.updateDocument('shipments', shipmentId, { currentStatus: newStatus });
 
+      // Reload shipments from Firestore
+      const shipmentList = await firebaseService.queryDocuments<Shipment>('shipments', []);
+      setShipments(shipmentList);
+
+      // Recalculate stats
+      // Recalculate stats
+      const dashboardStats = {
+        totalShipments: shipmentList.length,
+        activeShipments: shipmentList.filter(s => s.currentStatus !== 'DELIVERED').length,
+        totalRevenue: shipmentList.reduce((sum, s) => sum + (s.price || 0), 0),
+        totalUsers: users.length,
+        pendingApprovals: shipmentList.filter(s => s.currentStatus === 'PLACED').length,
+        deliveredToday: shipmentList.filter(s => {
+          const today = new Date().toDateString();
+          return s.currentStatus === 'DELIVERED' && new Date(s.updatedAt).toDateString() === today;
+        }).length
+      };
+      setStats(dashboardStats);
+      showToast('Shipment status updated successfully', 'success');
+    } catch (error) {
+      console.error('Failed to update shipment status:', error);
+      // Fallback to mock data reload
+      const updatedShipments = await mockDataService.getShipments();
+      setShipments(updatedShipments);
+      const updatedStats = await mockDataService.getDashboardStats();
+      setStats(updatedStats);
+      showToast('Status updated (Mock Data)', 'warning');
+    }
+  };
 
   const handleGenerateTemplate = async () => {
     if (!notifScenario) return;
@@ -95,12 +166,39 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'OVER
   };
 
   const handleApproveOrder = async (id: string) => {
-    await mockDataService.updateShipmentStatus(id, ShipmentStatus.PICKUP_ASSIGNED, 'Hub Admin');
-    // Refresh data
-    const updatedShipments = await mockDataService.getShipments();
-    setShipments(updatedShipments);
-    const updatedStats = await mockDataService.getDashboardStats();
-    setStats(updatedStats);
+    try {
+      const { firebaseService } = await import('../services/firebaseService');
+      // Update shipment status to PICKUP_ASSIGNED
+      await firebaseService.updateDocument('shipments', id, {
+        currentStatus: ShipmentStatus.PICKUP_ASSIGNED
+      });
+
+      // Notify Customer
+      const shipment = shipments.find(s => s.id === id);
+      if (shipment) {
+        await firebaseService.addNotification({
+          userId: shipment.customerId,
+          title: 'Order Accepted',
+          message: `Your order ${shipment.trackingId} has been accepted and a rider is being assigned.`,
+          type: 'SUCCESS',
+          read: false,
+          relatedId: shipment.id
+        });
+      }
+
+      // Refresh shipments from Firestore
+      await handleStatusChange(id, ShipmentStatus.PICKUP_ASSIGNED);
+      showToast('Order approved and pickup assigned', 'success');
+    } catch (error) {
+      console.error('Failed to approve order:', error);
+      // Fallback to mock data
+      await mockDataService.updateShipmentStatus(id, ShipmentStatus.PICKUP_ASSIGNED, 'Hub Admin');
+      const updatedShipments = await mockDataService.getShipments();
+      setShipments(updatedShipments);
+      const updatedStats = await mockDataService.getDashboardStats();
+      setStats(updatedStats);
+      showToast('Order approved (Mock Data)', 'warning');
+    }
   };
 
   const handleAddUser = () => {
@@ -111,7 +209,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'OVER
     console.log('Creating new user:', newUserForm);
     // Add user to state
     const newUser: User = {
-      id: `USR-${Date.now()}`,
+      id: `USR - ${Date.now()} `,
       name: newUserForm.name,
       email: newUserForm.email,
       phone: newUserForm.phone,
@@ -121,6 +219,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'OVER
     setUsers([...users, newUser]);
     setShowAddUserModal(false);
     setNewUserForm({ name: '', email: '', phone: '', role: 'CUSTOMER' });
+    showToast('New user added successfully', 'success');
   };
 
 
@@ -145,11 +244,89 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'OVER
     ));
     setShowEditUserModal(false);
     setSelectedUser(null);
+    showToast('User details updated successfully', 'success');
   };
 
   const handleViewShipment = (shipment: Shipment) => {
     setSelectedShipment(shipment);
     setShowViewShipmentModal(true);
+  };
+
+  const openAssignRiderModal = (shipment: Shipment) => {
+    setSelectedShipmentForAssignment(shipment);
+    setShowAssignRiderModal(true);
+    setSelectedRiderId('');
+  };
+
+  const confirmAssignment = async () => {
+    if (!selectedShipmentForAssignment || !selectedRiderId) return;
+
+    try {
+      const { firebaseService } = await import('../services/firebaseService');
+
+      // Update shipment
+      await firebaseService.updateDocument('shipments', selectedShipmentForAssignment.id, {
+        riderId: selectedRiderId,
+        currentStatus: ShipmentStatus.PICKUP_ASSIGNED
+      });
+
+      // Notify Rider
+      await firebaseService.addNotification({
+        userId: selectedRiderId,
+        title: 'New Order Assigned',
+        message: `You have been assigned to pickup order ${selectedShipmentForAssignment.trackingId} `,
+        type: 'INFO',
+        read: false,
+        relatedId: selectedShipmentForAssignment.id
+      });
+
+      // Create Rider Task
+      await firebaseService.addRiderTask({
+        riderId: selectedRiderId,
+        type: 'PICKUP',
+        status: 'PENDING',
+        address: `${selectedShipmentForAssignment.pickupAddress.street}, ${selectedShipmentForAssignment.pickupAddress.city}`,
+        customerName: selectedShipmentForAssignment.recipientName, // Or sender if available
+        timeSlot: 'ASAP', // You might want to format createdAt or estimatedDelivery
+        packageDetails: selectedShipmentForAssignment.description || 'Package',
+        earnings: selectedShipmentForAssignment.price ? selectedShipmentForAssignment.price * 0.8 : 15.00, // 80% commission or default
+        distance: `${selectedShipmentForAssignment.distanceMiles || 0} miles`,
+        shipmentId: selectedShipmentForAssignment.id,
+        startCoordinates: selectedShipmentForAssignment.pickupAddress.coordinates || { lat: 40.7128, lng: -74.0060 },
+        endCoordinates: selectedShipmentForAssignment.dropoffAddress.coordinates || { lat: 40.7489, lng: -73.9680 }
+      });
+
+      // Check if vehicle needs upgrade based on new load
+      await firebaseService.assignVehicleToRiderBasedOnLoad(selectedRiderId);
+
+      // Refresh data
+      const shipmentList = await firebaseService.queryDocuments<Shipment>('shipments', []);
+      setShipments(shipmentList);
+
+      setShowAssignRiderModal(false);
+      setSelectedShipmentForAssignment(null);
+      setSelectedRiderId('');
+
+      // Recalculate stats (simplified)
+      const dashboardStats = {
+        totalShipments: shipmentList.length,
+        activeShipments: shipmentList.filter(s => s.currentStatus !== 'DELIVERED').length,
+        totalRevenue: shipmentList.reduce((sum, s) => sum + (s.price || 0), 0),
+        totalUsers: users.length,
+        pendingApprovals: shipmentList.filter(s => s.currentStatus === 'PLACED').length,
+        deliveredToday: shipmentList.filter(s => {
+          const today = new Date().toDateString();
+          return s.currentStatus === 'DELIVERED' && new Date(s.updatedAt).toDateString() === today;
+        }).length
+      };
+      setStats(dashboardStats);
+
+      showToast('Rider assigned successfully!', 'success');
+
+    } catch (error) {
+      console.error('Failed to assign rider:', error);
+      showToast('Failed to assign rider. Please try again.', 'error');
+    }
   };
 
   // --- TAB RENDERERS ---
@@ -236,7 +413,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'OVER
           </div>
         </div>
 
-        <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-sm border border-white/60 overflow-hidden">
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-sm border border-white/60 overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-slate-50/80 border-b border-slate-100">
               <tr>
@@ -256,6 +433,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'OVER
                       </div>
                       <div>
                         <p className="font-medium text-slate-800">{user.name}</p>
+                        <p className="text-slate-800 font-medium">{user.name}</p>
                         <p className="text-xs text-slate-500">{user.email}</p>
                       </div>
                     </div>
@@ -263,16 +441,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'OVER
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wide
                     ${user.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' :
-                        user.role === 'RIDER' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}
-                  `}>
+                        user.role === 'RIDER' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
+                      }
+                    `}>
                       {user.role.replace('_', ' ')}
                     </span>
                   </td>
                   <td className="px-6 py-4">
                     <span className={`flex items-center gap-1.5 text-xs font-medium
                     ${user.status === 'ACTIVE' ? 'text-emerald-600' : 'text-slate-400'}
-                  `}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${user.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                    `}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${user.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-slate-300'} `}></span>
                       {user.status}
                     </span>
                   </td>
@@ -324,54 +503,77 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'OVER
 
         <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-sm border border-white/60 overflow-hidden">
           <table className="w-full text-left">
-            <thead className="bg-slate-50/80 border-b border-slate-100">
-              <tr>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Tracking ID</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Recipient</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Destination</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Status</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Actions</th>
+            <thead>
+              <tr className="text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <th className="px-6 py-3">Order ID</th>
+                <th className="px-6 py-3">Tracking ID</th>
+                <th className="px-6 py-3">Recipient</th>
+                <th className="px-6 py-3">Destination</th>
+                <th className="px-6 py-3">Status</th>
+                <th className="px-6 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredShipments.length > 0 ? (
                 filteredShipments.map(shipment => (
                   <tr key={shipment.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4 font-mono font-medium text-indigo-600">{shipment.id}</td>
-                    <td className="px-6 py-4 text-slate-800">{shipment.recipientName}</td>
+                    <td className="px-6 py-4">
+                      <span className="font-mono text-xs text-slate-500">{shipment.id.substring(0, 8)}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-mono text-sm text-indigo-600 font-medium">{shipment.trackingId}</span>
+                    </td>
+                    <td className="px-6 py-4 text-slate-800 font-medium text-sm">{shipment.recipientName}</td>
                     <td className="px-6 py-4 text-slate-600 text-sm truncate max-w-[200px]">{shipment.destination}</td>
                     <td className="px-6 py-4">
                       <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wide
-                        ${shipment.currentStatus === 'PLACED' ? 'bg-blue-100 text-blue-700' :
+                            ${shipment.currentStatus === 'PLACED' ? 'bg-blue-100 text-blue-700' :
                           shipment.currentStatus === 'DELIVERED' ? 'bg-emerald-100 text-emerald-700' :
-                            shipment.currentStatus === 'EXCEPTION' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}
+                            shipment.currentStatus === 'EXCEPTION' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                        }
                       `}>
                         {shipment.currentStatus.replace('_', ' ')}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      {shipment.currentStatus === 'PLACED' && (
-                        <button
-                          onClick={() => handleApproveOrder(shipment.id)}
-                          className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
-                        >
-                          Approve & Assign
-                        </button>
-                      )}
-                      {shipment.currentStatus !== 'PLACED' && (
+                      <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => handleViewShipment(shipment)}
-                          className="text-slate-400 hover:text-indigo-600 transition-colors text-xs font-medium"
+                          className="text-slate-400 hover:text-indigo-600 transition-colors p-1.5 rounded-lg hover:bg-indigo-50"
+                          title="View Details"
                         >
-                          View Details
+                          <Eye size={16} />
                         </button>
-                      )}
+                        {shipment.currentStatus === 'PLACED' && (
+                          <button
+                            onClick={() => handleApproveOrder(shipment.id)}
+                            className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                          >
+                            Approve & Assign
+                          </button>
+                        )}
+                        {shipment.currentStatus === 'PICKUP_ASSIGNED' && !shipment.riderId && (
+                          <button
+                            onClick={() => openAssignRiderModal(shipment)}
+                            className="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm flex items-center gap-1"
+                          >
+                            <Users size={12} />
+                            Assign Rider
+                          </button>
+                        )}
+                        {shipment.currentStatus === 'PICKUP_ASSIGNED' && shipment.riderId && (
+                          <span className="text-xs text-slate-400 font-medium flex items-center gap-1 cursor-not-allowed">
+                            <CheckCircle size={12} />
+                            Rider Assigned
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
+                  <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
                     <Package size={48} className="mx-auto mb-3 opacity-20" />
                     <p>No shipments found matching filter.</p>
                   </td>
@@ -634,12 +836,72 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'OVER
         </div>
       )}
 
-      {/* View Shipment Modal */}
       <ShipmentDetailsModal
         isOpen={showViewShipmentModal}
         onClose={() => setShowViewShipmentModal(false)}
         shipment={selectedShipment}
       />
+
+      {/* Assign Rider Modal */}
+      {showAssignRiderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in slide-in-from-bottom-4">
+            <h3 className="text-xl font-bold text-slate-800 mb-4">Assign Rider</h3>
+            <p className="text-sm text-slate-500 mb-4">
+              Select a rider for order <span className="font-mono font-bold text-slate-700">{selectedShipmentForAssignment?.trackingId}</span>
+            </p>
+
+            <div className="space-y-3 max-h-60 overflow-y-auto custom-scrollbar mb-6">
+              {users.filter(u => u.role === 'RIDER' && u.status === 'ACTIVE').map(rider => (
+                <div
+                  key={rider.id}
+                  onClick={() => setSelectedRiderId(rider.id)}
+                  className={`p - 3 rounded - xl border cursor - pointer transition - all flex items - center justify - between
+                    ${selectedRiderId === rider.id
+                      ? 'bg-indigo-50 border-indigo-500 ring-1 ring-indigo-500'
+                      : 'bg-white border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
+                    }
+`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs">
+                      {rider.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-medium text-slate-800 text-sm">{rider.name}</p>
+                      <p className="text-xs text-slate-500">{rider.phone}</p>
+                    </div>
+                  </div>
+                  {selectedRiderId === rider.id && <CheckCircle size={16} className="text-indigo-600" />}
+                </div>
+              ))}
+              {users.filter(u => u.role === 'RIDER' && u.status === 'ACTIVE').length === 0 && (
+                <p className="text-center text-slate-500 text-sm py-4">No active riders found.</p>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowAssignRiderModal(false);
+                  setSelectedShipmentForAssignment(null);
+                  setSelectedRiderId('');
+                }}
+                className="flex-1 py-2.5 border border-slate-200 rounded-lg text-slate-600 font-medium hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmAssignment}
+                disabled={!selectedRiderId}
+                className="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Confirm Assignment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -657,7 +919,7 @@ const StatCard = ({ title, value, icon: Icon, color }: any) => {
 
   return (
     <div className="bg-white/80 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-white/60 flex items-center gap-4 hover:shadow-md transition-shadow">
-      <div className={`p-4 rounded-xl ${colors[color] || colors.blue}`}>
+      <div className={`p - 4 rounded - xl ${colors[color] || colors.blue} `}>
         <Icon size={24} />
       </div>
       <div>
@@ -672,9 +934,9 @@ const DashboardTab = ({ id, label, icon: Icon, active, onClick }: { id: AdminTab
   <button
     onClick={() => onClick(id)}
     className={`
-      w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all
+w - full flex items - center gap - 3 px - 4 py - 3 rounded - xl text - sm font - medium transition - all
       ${active === id ? 'bg-indigo-600/10 text-indigo-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}
-    `}
+`}
   >
     <Icon size={18} />
     {label}
@@ -692,8 +954,8 @@ const SystemCard = ({ icon: Icon, label, status, ping, statusColor = 'emerald' }
         <span className="font-bold text-slate-700">{label}</span>
       </div>
       <div className="flex justify-between items-center text-sm">
-        <span className={`px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1.5 ${colorClass}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`}></span>
+        <span className={`px - 2 py - 1 rounded - md text - xs font - bold flex items - center gap - 1.5 ${colorClass} `}>
+          <span className={`w - 1.5 h - 1.5 rounded - full ${dotClass} `}></span>
           {status}
         </span>
         <span className="text-slate-400 flex items-center gap-1"><Wifi size={12} /> {ping}</span>

@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { User, UserRole } from '../types';
 import { sendOtp, verifyOtp, signInWithEmail, signUpWithEmail, signInWithGoogle } from '../services/authService';
-import { Box, Lock, Phone, Mail, User as UserIcon, ArrowRight, Loader2, ShieldCheck, Bike, Warehouse, LayoutDashboard, Plane, Cloud, MapPin } from 'lucide-react';
+import { Box, Lock, Phone, Mail, User as UserIcon, ArrowRight, Loader2, ShieldCheck, Bike, Warehouse, LayoutDashboard, Plane, Cloud, MapPin, Eye, EyeOff } from 'lucide-react';
 
 interface LoginViewProps {
   onLogin: (user: User) => void;
@@ -12,9 +12,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
   const [role, setRole] = useState<UserRole>('CUSTOMER');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
   const [step, setStep] = useState<'LOGIN' | 'SIGNUP'>('LOGIN');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,10 +37,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier || !password) return setError('Email and password are required');
+    if (!username.trim()) return setError('Username is required');
     setLoading(true);
     setError('');
     try {
-      const user = await signUpWithEmail(identifier, password, role, undefined);
+      const user = await signUpWithEmail(identifier, password, role, username.trim());
       onLogin(user);
     } catch (err: any) {
       console.error('Signup failed', err);
@@ -56,7 +59,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
       onLogin(user);
     } catch (err: any) {
       console.error('Google sign-in failed', err);
-      setError(err?.message || 'Google sign-in failed');
+      // Error message is already formatted by authService
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -191,14 +195,23 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Password</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Your password"
-                  className="w-full pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-slate-800 placeholder:text-slate-400"
-                  required
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Your password"
+                    className="w-full pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-slate-800 placeholder:text-slate-400"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
               </div>
 
               <div className="flex gap-3">
@@ -246,6 +259,22 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
           ) : (
             <form onSubmit={handleSignup} className="space-y-6 animate-in slide-in-from-right duration-300">
               <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Username</label>
+                <div className="relative group">
+                  <div className="absolute left-3 top-3.5 text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+                    <UserIcon size={20} />
+                  </div>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-slate-800 placeholder:text-slate-400"
+                    placeholder="Choose your username"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
                 <input type="email" value={identifier} onChange={(e) => setIdentifier(e.target.value)} className="w-full pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-slate-800 placeholder:text-slate-400" placeholder="you@example.com" required />
               </div>
@@ -255,7 +284,23 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Password</label>
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-slate-800 placeholder:text-slate-400" placeholder="Choose a password" required />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-slate-800 placeholder:text-slate-400"
+                    placeholder="Choose a password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Role</label>

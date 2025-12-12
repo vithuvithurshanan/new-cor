@@ -1,25 +1,71 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, Vehicle, FleetStats } from '../types';
+import { apiService } from '../services/apiService';
 import { mockDataService } from '../services/mockDataService';
+import { useToast } from './ui/ToastContext';
 import { Truck, Activity, CheckCircle, Wrench, Users, Package, Map as MapIcon } from 'lucide-react';
 
 export const VehicleDashboardView: React.FC = () => {
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [fleetStats, setFleetStats] = useState<FleetStats | null>(null);
+    const { showToast } = useToast();
     const [users, setUsers] = useState<User[]>([]);
     const [showAddVehicleModal, setShowAddVehicleModal] = useState(false);
     const [newVehicleForm, setNewVehicleForm] = useState({ plateNumber: '', type: 'VAN', capacity: '' });
 
     useEffect(() => {
         const loadData = async () => {
-            const vehicleList = await mockDataService.getVehicles();
-            setVehicles(vehicleList);
+            try {
+                const { firebaseService } = await import('../services/firebaseService');
 
-            const fleetStatistics = await mockDataService.getFleetStats();
-            setFleetStats(fleetStatistics);
+                const [vehicleList, userList] = await Promise.all([
+                    firebaseService.queryDocuments<Vehicle>('vehicles', []),
+                    firebaseService.queryDocuments<User>('users', [])
+                ]);
 
-            const userList = await mockDataService.getUsers();
-            setUsers(userList);
+                // Check if data is empty (fresh install), if so, load mock data
+                if (vehicleList.length === 0) {
+                    console.log('Firestore empty, seeding with mock data...');
+                    const mockVehicles = await mockDataService.getVehicles();
+                    setVehicles(mockVehicles);
+
+                    const mockStats = await mockDataService.getFleetStats();
+                    setFleetStats(mockStats);
+                } else {
+                    setVehicles(vehicleList);
+
+                    // Calculate fleet stats from real data
+                    const fleetStatistics = {
+                        totalVehicles: vehicleList.length,
+                        availableVehicles: vehicleList.filter(v => v.status === 'AVAILABLE').length,
+                        inUseVehicles: vehicleList.filter(v => v.status === 'IN_USE').length,
+                        maintenanceVehicles: vehicleList.filter(v => v.status === 'MAINTENANCE').length,
+                        totalCapacity: vehicleList.reduce((sum, v) => sum + (parseInt(v.capacity) || 0), 0),
+                        utilizationRate: vehicleList.length > 0
+                            ? (vehicleList.filter(v => v.status === 'IN_USE').length / vehicleList.length) * 100
+                            : 0,
+                        // Default values for missing stats in real data calculation
+                        activeVehicles: vehicleList.filter(v => v.status === 'IN_USE').length,
+                        inMaintenance: vehicleList.filter(v => v.status === 'MAINTENANCE').length,
+                        totalDistance: 124.5, // Mock value for now
+                        fuelEfficiency: 8.2 // Mock value for now
+                    };
+                    setFleetStats(fleetStatistics);
+                }
+
+                setUsers(userList);
+            } catch (error) {
+                console.error('Firestore error, using mock data:', error);
+                const vehicleList = await mockDataService.getVehicles();
+                setVehicles(vehicleList);
+
+                const fleetStatistics = await mockDataService.getFleetStats();
+                setFleetStats(fleetStatistics);
+
+                const userList = await mockDataService.getUsers();
+                setUsers(userList);
+            }
         };
         loadData();
     }, []);
@@ -28,20 +74,72 @@ export const VehicleDashboardView: React.FC = () => {
         setShowAddVehicleModal(true);
     };
 
-    const saveNewVehicle = () => {
+    const saveNewVehicle = async () => {
         console.log('Creating new vehicle:', newVehicleForm);
-        // Add vehicle to state
-        const newVehicle: Vehicle = {
-            id: `VEH-${Date.now()}`,
-            plateNumber: newVehicleForm.plateNumber,
-            type: newVehicleForm.type as any,
-            capacity: newVehicleForm.capacity,
-            status: 'AVAILABLE',
-            lastMaintenance: new Date().toLocaleDateString()
-        };
-        setVehicles([...vehicles, newVehicle]);
-        setShowAddVehicleModal(false);
-        setNewVehicleForm({ plateNumber: '', type: 'VAN', capacity: '' });
+        try {
+            const { firebaseService } = await import('../services/firebaseService');
+
+            const newVehicleData: Omit<Vehicle, 'id'> = {
+                plateNumber: newVehicleForm.plateNumber,
+                type: newVehicleForm.type as any,
+                capacity: newVehicleForm.capacity,
+                status: 'AVAILABLE',
+                lastMaintenance: new Date().toLocaleDateString()
+            };
+
+            // Add to Firestore
+            const docId = await firebaseService.addDocument('vehicles', newVehicleData);
+
+            // Update local state
+            const newVehicle: Vehicle = {
+                id: docId,
+                ...newVehicleData
+            };
+
+            setVehicles([...vehicles, newVehicle]);
+            setShowAddVehicleModal(false);
+            setNewVehicleForm({ plateNumber: '', type: 'VAN', capacity: '' });
+
+            // Re-fetch or update stats based on the new vehicle
+            // Assuming apiService.getFleetStats() would fetch the updated stats from the backend
+            // or we can manually update if the backend doesn't provide a direct way to get updated stats
+            // For this change, we'll simulate an update based on the new vehicle
+            const stats = await apiService.getFleetStats();
+            setFleetStats({
+                ...stats,
+                totalVehicles: stats.totalVehicles + 1,
+                availableVehicles: stats.availableVehicles + 1
+            });
+            showToast('Vehicle added successfully!', 'success');
+        } catch (error) {
+            console.error('Failed to save vehicle to Firestore, falling back to local state:', error);
+
+            // Fallback: Add to local state only (Demo mode)
+            const newVehicle: Vehicle = {
+                id: `TEMP-${Date.now()}`,
+                plateNumber: newVehicleForm.plateNumber,
+                type: newVehicleForm.type as any,
+                capacity: newVehicleForm.capacity,
+                status: 'AVAILABLE',
+                lastMaintenance: new Date().toLocaleDateString()
+            };
+
+            setVehicles([...vehicles, newVehicle]);
+
+            // Update stats locally
+            if (fleetStats) {
+                setFleetStats({
+                    ...fleetStats,
+                    totalVehicles: fleetStats.totalVehicles + 1,
+                    availableVehicles: fleetStats.availableVehicles + 1
+                });
+            }
+
+            setShowAddVehicleModal(false);
+            setNewVehicleForm({ plateNumber: '', type: 'VAN', capacity: '' });
+
+            showToast('Vehicle added (Demo Mode - Local Only)', 'warning');
+        }
     };
 
     return (
@@ -142,12 +240,13 @@ export const VehicleDashboardView: React.FC = () => {
                             <div key={vehicle.id} className="bg-white/80 backdrop-blur-xl p-6 rounded-2xl border border-white/60 shadow-sm hover:shadow-lg transition-all group">
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="p-3 bg-slate-100 rounded-xl group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
-                                        {vehicle.type === 'BIKE' ? <Users size={24} /> : <Truck size={24} />}
+                                        {vehicle.type === 'VAN' ? <Truck size={24} /> : <Truck size={24} />}
                                     </div>
-                                    <span className={`px-2 py-1 rounded-md text-xs font-bold
+                                    <span className={`px - 2 py - 1 rounded - md text - xs font - bold
                      ${vehicle.status === 'AVAILABLE' ? 'bg-emerald-100 text-emerald-700' :
-                                            vehicle.status === 'IN_USE' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}
-                   `}>
+                                            vehicle.status === 'IN_USE' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
+                                        }
+`}>
                                         {vehicle.status.replace('_', ' ')}
                                     </span>
                                 </div>
@@ -212,7 +311,6 @@ export const VehicleDashboardView: React.FC = () => {
                                     onChange={(e) => setNewVehicleForm({ ...newVehicleForm, type: e.target.value })}
                                     className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                                 >
-                                    <option value="BIKE">Bike</option>
                                     <option value="VAN">Van</option>
                                     <option value="TRUCK">Truck</option>
                                 </select>

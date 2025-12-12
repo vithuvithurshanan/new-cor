@@ -240,12 +240,23 @@ export const PlaceOrderView: React.FC<{ currentUser?: User | null }> = ({ curren
       setIsProcessingPayment(false);
       setPaymentSuccess(true);
 
-      // Show success notification
-      if (window.Notification && Notification.permission === 'granted') {
-        new Notification('Payment Successful! 🎉', {
-          body: `Your order ${shipmentData.trackingId} has been placed successfully.`,
-          icon: '/favicon.ico'
-        });
+      // Notify Admins
+      try {
+        const { firebaseService } = await import('../services/firebaseService');
+        const admins = await firebaseService.queryDocuments<User>('users', [{ field: 'role', operator: '==', value: 'ADMIN' }]);
+
+        for (const admin of admins) {
+          await firebaseService.addNotification({
+            userId: admin.id,
+            title: 'New Order Placed',
+            message: `New order ${shipmentData.trackingId} has been placed by ${formData.recipientName}.`,
+            type: 'INFO',
+            read: false,
+            relatedId: createdShipmentId || shipmentData.trackingId
+          });
+        }
+      } catch (error) {
+        console.error('Failed to notify admins:', error);
       }
 
     } catch (error) {
@@ -635,6 +646,13 @@ export const PlaceOrderView: React.FC<{ currentUser?: User | null }> = ({ curren
                     setFormData({ ...formData, weight: isNaN(parsed) ? 0 : parsed });
                   }}
                 />
+                <div className="mt-2 text-xs font-medium text-indigo-600 flex items-center gap-1">
+                  <Truck size={12} />
+                  Recommended Vehicle: {
+                    formData.weight <= 20 ? 'Bike' :
+                      formData.weight <= 500 ? 'Van' : 'Truck'
+                  }
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Package Type</label>

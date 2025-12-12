@@ -129,6 +129,7 @@ const RoutingControl = ({
 export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser }) => {
   const [trackingId, setTrackingId] = useState('');
   const [shipment, setShipment] = useState<Shipment | null>(null);
+  const [rider, setRider] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [routeMetrics, setRouteMetrics] = useState<{ totalDistance: number, totalTime: number } | null>(null);
@@ -150,15 +151,53 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser }) => {
     setRouteMetrics(null); // Reset metrics on new search
 
     try {
-      const data = await mockDataService.getShipmentById(id);
+      // Try to load from Firestore first
+      const { firebaseService } = await import('../services/firebaseService');
+      const allShipments = await firebaseService.queryDocuments<Shipment>('shipments', []);
+      const data = allShipments.find(s => s.trackingId === id || s.id === id);
+
       if (data) {
         setShipment(data);
+        // Fetch rider details if assigned
+        if (data.riderId) {
+          try {
+            const riderData = await firebaseService.getDocument<User>('users', data.riderId);
+            setRider(riderData);
+          } catch (e) {
+            console.error('Failed to fetch rider:', e);
+            // Try mock rider
+            const mockUsers = await mockDataService.getUsers();
+            setRider(mockUsers.find(u => u.id === data.riderId) || null);
+          }
+        } else {
+          setRider(null);
+        }
       } else {
         setShipment(null);
+        setRider(null);
         setError('Shipment not found. Please check the ID.');
       }
     } catch (err) {
-      setError('Error fetching shipment details.');
+      console.error('Firestore error, trying mock data:', err);
+      // Fallback to mock data
+      try {
+        const data = await mockDataService.getShipmentById(id);
+        if (data) {
+          setShipment(data);
+          if (data.riderId) {
+            const mockUsers = await mockDataService.getUsers();
+            setRider(mockUsers.find(u => u.id === data.riderId) || null);
+          } else {
+            setRider(null);
+          }
+        } else {
+          setShipment(null);
+          setRider(null);
+          setError('Shipment not found. Please check the ID.');
+        }
+      } catch (mockErr) {
+        setError('Error fetching shipment details.');
+      }
     } finally {
       setLoading(false);
     }
@@ -349,6 +388,32 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser }) => {
                   <h3 className="text-3xl font-bold text-indigo-800 tracking-tight mb-1">{STATUS_STEPS.find(s => s.key === shipment.currentStatus)?.label}</h3>
                   <p className="text-slate-600 text-sm">Estimated Delivery: <span className="font-bold text-slate-800">{shipment.estimatedDelivery}</span></p>
                 </div>
+
+                {/* Rider Details Card */}
+                {rider && (
+                  <div className="mb-8 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm animate-in slide-in-from-left-6 duration-500 delay-100">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-lg">
+                        {rider.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-400 uppercase font-bold mb-0.5">Assigned Rider</p>
+                        <h4 className="font-bold text-slate-800">{rider.name}</h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                            Active
+                          </span>
+                          {/* Placeholder for vehicle info if we had it linked directly */}
+                          <span className="text-xs text-slate-500 flex items-center gap-1">
+                            <Truck size={12} />
+                            Courier
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Vertical Timeline */}
                 <div className="relative pl-4 md:pl-6 space-y-0">

@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Shipment, User, ShipmentStatus } from '../types';
 import { mockDataService } from '../services/mockDataService';
-import { Package, Search, Filter, ArrowRight, Clock, MapPin, Truck, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Package, Search, Filter, ArrowRight, Clock, MapPin, Truck, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
 import { ShipmentDetailsModal } from './ShipmentDetailsModal';
+import { RateRiderModal } from './RateRiderModal';
 
 interface CustomerOrdersViewProps {
     currentUser: User;
 }
+
+
 
 export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ currentUser }) => {
     const [shipments, setShipments] = useState<Shipment[]>([]);
@@ -14,6 +17,32 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ currentU
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<ShipmentStatus | 'ALL'>('ALL');
 
+    // Rating Modal State
+    const [showRatingModal, setShowRatingModal] = useState(false);
+    const [shipmentToRate, setShipmentToRate] = useState<Shipment | null>(null);
+
+    const handleRateRider = (shipment: Shipment) => {
+        setShipmentToRate(shipment);
+        setShowRatingModal(true);
+    };
+
+    const submitRating = async (shipmentId: string, rating: number, feedback: string) => {
+        try {
+            const { firebaseService } = await import('../services/firebaseService');
+            await firebaseService.updateDocument('shipments', shipmentId, { rating, feedback });
+
+            // Update local state
+            setShipments(prev => prev.map(s =>
+                s.id === shipmentId ? { ...s, rating, feedback } : s
+            ));
+
+            // Show success toast (using alert for now as toast hook isn't directly imported here but handled by parent)
+            // Ideally we'd use the toast context here
+        } catch (error) {
+            console.error('Failed to submit rating:', error);
+            alert('Failed to submit rating. Please try again.');
+        }
+    };
     // Modal State
     const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
     const [showModal, setShowModal] = useState(false);
@@ -21,25 +50,52 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ currentU
     useEffect(() => {
         const loadShipments = async () => {
             setLoading(true);
-            // In a real app, we'd fetch only the user's shipments from the backend
-            // For now, we fetch all and filter client-side
-            const allShipments = await mockDataService.getShipments();
+            try {
+                // Load shipments from Firestore
+                const { firebaseService } = await import('../services/firebaseService');
+                const allShipments = await firebaseService.queryDocuments<Shipment>('shipments', []);
 
-            // Filter for shipments where the user is the sender or recipient
-            // Note: In a real scenario, we'd match by ID or email more robustly
-            const userShipments = allShipments.filter(s =>
-                s.senderId === currentUser.id ||
-                s.recipientEmail === currentUser.email ||
-                // For demo purposes, if the user is a generic customer, show some demo data
-                (currentUser.role === 'CUSTOMER' && ['TRK-112233', 'TRK-885210', 'TRK-998877'].includes(s.id))
-            );
+                // Filter for shipments where the user is the customer
+                const userShipments = allShipments.filter(s =>
+                    s.customerId === currentUser.id ||
+                    s.recipientEmail === currentUser.email
+                );
 
-            setShipments(userShipments);
+                setShipments(userShipments);
+            } catch (error) {
+                console.error('Failed to load shipments from Firestore:', error);
+                // Fallback to mock data if Firestore fails
+                const mockDataService = await import('../services/mockDataService');
+                const allShipments = await mockDataService.mockDataService.getShipments();
+                const userShipments = allShipments.filter(s =>
+                    s.customerId === currentUser.id ||
+                    s.recipientEmail === currentUser.email ||
+                    (currentUser.role === 'CUSTOMER' && ['TRK-112233', 'TRK-885210', 'TRK-998877'].includes(s.id))
+                );
+                setShipments(userShipments);
+            }
             setLoading(false);
         };
 
         loadShipments();
     }, [currentUser]);
+
+    const handleCancelOrder = async (shipmentId: string) => {
+        if (!confirm('Are you sure you want to cancel this order?')) return;
+
+        try {
+            const { firebaseService } = await import('../services/firebaseService');
+            await firebaseService.updateDocument('shipments', shipmentId, { currentStatus: ShipmentStatus.CANCELLED });
+
+            // Update local state
+            setShipments(prev => prev.map(s =>
+                s.id === shipmentId ? { ...s, currentStatus: ShipmentStatus.CANCELLED } : s
+            ));
+        } catch (error) {
+            console.error('Failed to cancel order:', error);
+            alert('Failed to cancel order. Please try again.');
+        }
+    };
 
     const filteredShipments = shipments.filter(s => {
         const matchesSearch =
@@ -76,7 +132,6 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ currentU
             default: return <Clock size={16} />;
         }
     };
-
     return (
         <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-1 gap-8 pb-12 relative-7xl  animate-fade-in">
             {/* Header */}
@@ -136,7 +191,15 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ currentU
                                     </div>
                                     <div>
                                         <div className="flex items-center gap-3 mb-1">
-                                            <span className="font-mono font-bold text-lg text-slate-800">{shipment.id}</span>
+                                            <div>
+                                                <p className="text-xs text-slate-400 mb-0.5">Order ID</p>
+                                                <span className="font-mono text-xs text-slate-600">{shipment.id.substring(0, 12)}</span>
+                                            </div>
+                                            <div className="h-8 w-px bg-slate-200"></div>
+                                            <div>
+                                                <p className="text-xs text-slate-400 mb-0.5">Tracking ID</p>
+                                                <span className="font-mono font-bold text-sm text-indigo-600">{shipment.trackingId}</span>
+                                            </div>
                                             <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 ${getStatusColor(shipment.currentStatus)}`}>
                                                 {getStatusIcon(shipment.currentStatus)}
                                                 {shipment.currentStatus.replace(/_/g, ' ')}
@@ -167,13 +230,35 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ currentU
                                 </div>
 
                                 {/* Right: Action */}
-                                <button
-                                    onClick={() => handleViewDetails(shipment)}
-                                    className="w-full md:w-auto px-5 py-2.5 bg-white border border-slate-200 text-slate-700 font-medium rounded-xl hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 transition-all flex items-center justify-center gap-2 shadow-sm"
-                                >
-                                    View Details
-                                    <ArrowRight size={16} />
-                                </button>
+                                <div className="flex flex-col md:flex-row gap-2">
+                                    <button
+                                        onClick={() => handleViewDetails(shipment)}
+                                        className="w-full md:w-auto px-5 py-2.5 bg-white border border-slate-200 text-slate-700 font-medium rounded-xl hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 transition-all flex items-center justify-center gap-2 shadow-sm"
+                                    >
+                                        View Details
+                                        <ArrowRight size={16} />
+                                    </button>
+
+                                    {shipment.currentStatus === ShipmentStatus.PLACED && (
+                                        <button
+                                            onClick={() => handleCancelOrder(shipment.id)}
+                                            className="w-full md:w-auto px-5 py-2.5 bg-white border border-red-200 text-red-600 font-medium rounded-xl hover:bg-red-50 hover:border-red-300 transition-all flex items-center justify-center gap-2 shadow-sm"
+                                        >
+                                            Cancel Order
+                                            <XCircle size={16} />
+                                        </button>
+                                    )}
+
+                                    {shipment.currentStatus === ShipmentStatus.DELIVERED && !shipment.rating && (
+                                        <button
+                                            onClick={() => handleRateRider(shipment)}
+                                            className="w-full md:w-auto px-5 py-2.5 bg-amber-50 border border-amber-200 text-amber-700 font-medium rounded-xl hover:bg-amber-100 hover:border-amber-300 transition-all flex items-center justify-center gap-2 shadow-sm"
+                                        >
+                                            Rate Rider
+                                            <CheckCircle size={16} />
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     ))
@@ -193,6 +278,14 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ currentU
                 isOpen={showModal}
                 onClose={() => setShowModal(false)}
                 shipment={selectedShipment}
+            />
+
+            {/* Rate Rider Modal */}
+            <RateRiderModal
+                isOpen={showRatingModal}
+                onClose={() => setShowRatingModal(false)}
+                shipment={shipmentToRate}
+                onSubmit={submitRating}
             />
         </div>
     );

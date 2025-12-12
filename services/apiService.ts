@@ -81,8 +81,8 @@ class ApiService {
             weight: shipment.weight,
             description: shipment.description,
             service_type: shipment.serviceType,
-           payment_method: shipment.paymentMethod,
-           payment_status: shipment.paymentStatus,
+            payment_method: shipment.paymentMethod,
+            payment_status: shipment.paymentStatus,
             price: shipment.price,
             distance_miles: shipment.distanceMiles,
             estimated_delivery: shipment.estimatedDelivery
@@ -138,6 +138,13 @@ class ApiService {
     async getUsers(): Promise<User[]> {
         const data = await this.fetch<{ users: User[] }>('/users');
         return data.users;
+    }
+
+    async updateUserProfile(userId: string, data: Partial<User>): Promise<void> {
+        await this.fetch(`/users/${userId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        });
     }
 
     // Vehicles

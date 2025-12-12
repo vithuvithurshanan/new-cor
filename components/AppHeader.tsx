@@ -87,7 +87,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ user, currentView }) => {
           <StatusIndicator />
 
           {/* Notifications */}
-          <NotificationCenter />
+          <NotificationCenter currentUser={user} />
 
           {/* User Status Indicator */}
           <div className="flex items-center gap-2">

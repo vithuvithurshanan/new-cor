@@ -9,7 +9,19 @@ export enum ShipmentStatus {
   OUT_FOR_DELIVERY = "OUT_FOR_DELIVERY",
   DELIVERED = "DELIVERED",
   EXCEPTION = "EXCEPTION",
-  DELAYED = "DELAYED"
+  DELAYED = "DELAYED",
+  CANCELLED = "CANCELLED"
+}
+
+export interface AppNotification {
+  id: string;
+  userId: string; // Recipient user ID
+  title: string;
+  message: string;
+  type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
+  read: boolean;
+  createdAt: string;
+  relatedId?: string; // e.g., shipmentId
 }
 
 export interface ShipmentEvent {
@@ -40,6 +52,7 @@ export interface Shipment {
   customerId: string;
   riderId?: string;
   recipientName: string;
+  recipientEmail?: string;
   pickupAddress: Address;
   dropoffAddress: Address;
   weight: number;
@@ -55,6 +68,8 @@ export interface Shipment {
   createdAt: string;
   updatedAt: string;
   destination?: string;
+  rating?: number;
+  feedback?: string;
 }
 
 export interface DashboardStats {
@@ -72,6 +87,7 @@ export type RiderTaskStatus = 'PENDING' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETE
 
 export interface RiderTask {
   id: string;
+  riderId?: string; // Assigned rider
   type: RiderTaskType;
   status: RiderTaskStatus;
   address: string;
@@ -120,7 +136,7 @@ export interface PricingConfig {
 // Fleet Management Types
 export interface Vehicle {
   id: string;
-  type: 'TRUCK' | 'VAN' | 'BIKE';
+  type: 'TRUCK' | 'VAN';
   plateNumber: string;
   status: 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE';
   currentDriverId?: string;

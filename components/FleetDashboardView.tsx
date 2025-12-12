@@ -1,9 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { RiderView } from './RiderView';
+import { RiderHistoryList } from './RiderHistoryList';
 import { TrackingView } from './TrackingView';
 import { User, Vehicle, FleetStats, PackageAssignment, Shipment, RiderTask } from '../types';
 import { mockDataService } from '../services/mockDataService';
-import { LayoutDashboard, Map, Bike, Users, Activity, CheckCircle, Package, MapPin, DollarSign, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, Map, Bike, Users, Activity, CheckCircle, Package, MapPin, DollarSign, TrendingUp, X, Navigation, Phone, Clock } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Fix for default Leaflet markers
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+    iconUrl: icon,
+    shadowUrl: iconShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41]
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
 
 interface FleetDashboardViewProps {
     currentUser?: User;
@@ -23,28 +40,99 @@ export const FleetDashboardView: React.FC<FleetDashboardViewProps> = ({ currentU
     const [riders, setRiders] = useState<User[]>([]);
     const [tasks, setTasks] = useState<RiderTask[]>([]);
 
+    // Modal State
+    const [selectedRider, setSelectedRider] = useState<User | null>(null);
+    const [showRiderModal, setShowRiderModal] = useState(false);
+
+    const handleRiderClick = (rider: User) => {
+        setSelectedRider(rider);
+        setShowRiderModal(true);
+    };
+
+
     useEffect(() => {
         const loadData = async () => {
-            // Load all fleet data
-            const vehicleList = await mockDataService.getVehicles();
-            setVehicles(vehicleList);
+            try {
+                const { firebaseService } = await import('../services/firebaseService');
 
-            const stats = await mockDataService.getFleetStats();
-            setFleetStats(stats);
+                // Load all fleet data from Firestore
+                const [vehicleList, shipmentList, userList, taskList] = await Promise.all([
+                    firebaseService.queryDocuments<Vehicle>('vehicles', []),
+                    firebaseService.queryDocuments<Shipment>('shipments', []),
+                    firebaseService.queryDocuments<User>('users', []),
+                    firebaseService.queryDocuments<RiderTask>('riderTasks', [])
+                ]);
 
-            const shipmentList = await mockDataService.getShipments();
-            setShipments(shipmentList);
+                // Check if data is empty (fresh install), if so, load mock data
+                if (vehicleList.length === 0 && shipmentList.length === 0) {
+                    console.log('Firestore empty, seeding Fleet Dashboard with mock data...');
+                    const mockVehicles = await mockDataService.getVehicles();
+                    setVehicles(mockVehicles);
 
-            const userList = await mockDataService.getUsers();
-            const riderList = userList.filter(u => u.role === 'RIDER');
-            setRiders(riderList);
+                    const mockShipments = await mockDataService.getShipments();
+                    setShipments(mockShipments);
 
-            const taskList = await mockDataService.getRiderTasks();
-            setTasks(taskList);
+                    const mockTasks = await mockDataService.getRiderTasks();
+                    setTasks(mockTasks);
 
-            // Load package assignments (mock data for now)
-            const packageList: PackageAssignment[] = [];
-            setPackages(packageList);
+                    const mockStats = await mockDataService.getFleetStats();
+                    setFleetStats(mockStats);
+
+                    const mockUsers = await mockDataService.getUsers();
+                    const riderList = mockUsers.filter(u => u.role === 'RIDER');
+                    setRiders(riderList);
+                } else {
+                    setVehicles(vehicleList);
+                    setShipments(shipmentList);
+                    setTasks(taskList);
+
+                    const riderList = userList.filter(u => u.role === 'RIDER');
+                    setRiders(riderList);
+
+                    // Calculate fleet stats from real data
+                    const stats = {
+                        totalVehicles: vehicleList.length,
+                        availableVehicles: vehicleList.filter(v => v.status === 'AVAILABLE').length,
+                        inUseVehicles: vehicleList.filter(v => v.status === 'IN_USE').length,
+                        maintenanceVehicles: vehicleList.filter(v => v.status === 'MAINTENANCE').length,
+                        totalCapacity: vehicleList.reduce((sum, v) => sum + (parseInt(v.capacity) || 0), 0),
+                        utilizationRate: vehicleList.length > 0
+                            ? (vehicleList.filter(v => v.status === 'IN_USE').length / vehicleList.length) * 100
+                            : 0,
+                        // Default values for missing stats in real data calculation
+                        activeVehicles: vehicleList.filter(v => v.status === 'IN_USE').length,
+                        inMaintenance: vehicleList.filter(v => v.status === 'MAINTENANCE').length,
+                        totalDistance: 124.5, // Mock value for now
+                        fuelEfficiency: 8.2 // Mock value for now
+                    };
+                    setFleetStats(stats);
+                }
+
+                // Load package assignments (empty for now)
+                const packageList: PackageAssignment[] = [];
+                setPackages(packageList);
+            } catch (error) {
+                console.error('Firestore error, using mock data:', error);
+                // Fallback to mock data
+                const vehicleList = await mockDataService.getVehicles();
+                setVehicles(vehicleList);
+
+                const stats = await mockDataService.getFleetStats();
+                setFleetStats(stats);
+
+                const shipmentList = await mockDataService.getShipments();
+                setShipments(shipmentList);
+
+                const userList = await mockDataService.getUsers();
+                const riderList = userList.filter(u => u.role === 'RIDER');
+                setRiders(riderList);
+
+                const taskList = await mockDataService.getRiderTasks();
+                setTasks(taskList);
+
+                const packageList: PackageAssignment[] = [];
+                setPackages(packageList);
+            }
         };
         loadData();
     }, []);
@@ -300,7 +388,11 @@ export const FleetDashboardView: React.FC<FleetDashboardViewProps> = ({ currentU
                             const assignedVehicle = vehicles.find(v => v.currentDriverId === rider.id);
 
                             return (
-                                <tr key={rider.id} className="hover:bg-slate-50/50 transition-colors">
+                                <tr
+                                    key={rider.id}
+                                    onClick={() => handleRiderClick(rider)}
+                                    className="hover:bg-slate-50/80 transition-colors cursor-pointer border-b border-transparent hover:border-indigo-100"
+                                >
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-3">
                                             <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">
@@ -386,6 +478,195 @@ export const FleetDashboardView: React.FC<FleetDashboardViewProps> = ({ currentU
             <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
                 {renderContent()}
             </div>
+
+            {/* Rider Detail Modal */}
+            {showRiderModal && selectedRider && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+                        {/* Modal Header */}
+                        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xl shadow-sm">
+                                    {selectedRider.name.charAt(0)}
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-slate-800">{selectedRider.name}</h3>
+                                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                                        <span className={`flex items-center gap-1.5 font-medium ${selectedRider.status === 'ACTIVE' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                            <span className={`w-2 h-2 rounded-full ${selectedRider.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                                            {selectedRider.status}
+                                        </span>
+                                        <span>•</span>
+                                        <span>{selectedRider.email}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowRiderModal(false)}
+                                className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+                            >
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        {/* Modal Content */}
+                        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+                            {/* Left Panel: Task Details */}
+                            <div className="w-full lg:w-1/3 p-6 overflow-y-auto border-r border-slate-100 bg-white">
+                                <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Current Activity</h4>
+
+                                {(() => {
+                                    const activeTask = tasks.find(t => t.id.includes(selectedRider.id.slice(-2)) && (t.status === 'IN_PROGRESS' || t.status === 'ACCEPTED'));
+
+                                    if (activeTask) {
+                                        return (
+                                            <div className="space-y-6">
+                                                <div className="bg-indigo-50 rounded-2xl p-5 border border-indigo-100">
+                                                    <div className="flex items-center gap-2 mb-3">
+                                                        <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+                                                            <Package size={20} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-indigo-900">Order #{activeTask.id.slice(0, 8)}</p>
+                                                            <p className="text-xs text-indigo-700 font-medium">{activeTask.type} Task</p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-3">
+                                                        <div className="flex items-start gap-3">
+                                                            <MapPin size={16} className="text-indigo-400 mt-1" />
+                                                            <div>
+                                                                <p className="text-xs text-slate-500 uppercase font-bold">Destination</p>
+                                                                <p className="text-sm text-slate-700 font-medium">{activeTask.address}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-start gap-3">
+                                                            <Users size={16} className="text-indigo-400 mt-1" />
+                                                            <div>
+                                                                <p className="text-xs text-slate-500 uppercase font-bold">Customer</p>
+                                                                <p className="text-sm text-slate-700 font-medium">{activeTask.customerName}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-start gap-3">
+                                                            <Clock size={16} className="text-indigo-400 mt-1" />
+                                                            <div>
+                                                                <p className="text-xs text-slate-500 uppercase font-bold">Time Slot</p>
+                                                                <p className="text-sm text-slate-700 font-medium">{activeTask.timeSlot}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <h5 className="font-bold text-slate-800 mb-3">Assigned Vehicle</h5>
+                                                    {(() => {
+                                                        const vehicle = vehicles.find(v => v.currentDriverId === selectedRider.id);
+                                                        if (vehicle) {
+                                                            return (
+                                                                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                                    <div className="p-2 bg-white rounded-lg shadow-sm">
+                                                                        {vehicle.type === 'BIKE' ? <Bike size={20} className="text-slate-600" /> : <Activity size={20} className="text-slate-600" />}
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="font-bold text-slate-800">{vehicle.plateNumber}</p>
+                                                                        <p className="text-xs text-slate-500 capitalize">{vehicle.type.toLowerCase()}</p>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        }
+                                                        return <p className="text-sm text-slate-500 italic">No vehicle assigned.</p>;
+                                                    })()}
+                                                </div>
+
+                                                <div className="flex gap-2">
+                                                    <button className="flex-1 py-2 bg-indigo-600 text-white rounded-xl font-medium shadow-md hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2">
+                                                        <Phone size={16} /> Call Rider
+                                                    </button>
+                                                    <button className="flex-1 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-50 transition-colors">
+                                                        Message
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+
+                                    return (
+                                        <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                                            <Bike size={48} className="mx-auto text-slate-300 mb-3" />
+                                            <p className="text-slate-500 font-medium">No active tasks</p>
+                                            <p className="text-xs text-slate-400">Rider is currently idle.</p>
+                                        </div>
+                                    );
+                                })()}
+
+                                {/* History Section */}
+                                <div className="mt-8">
+                                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Recent History</h4>
+                                    <RiderHistoryList shipments={shipments.filter(s =>
+                                        (s.riderId === selectedRider.id || tasks.some(t => t.shipmentId === s.id && t.riderId === selectedRider.id)) &&
+                                        (s.currentStatus === 'DELIVERED' || s.currentStatus === 'PICKED')
+                                    ).slice(0, 5)} />
+                                </div>
+                            </div>
+
+                            {/* Right Panel: Map */}
+                            <div className="flex-1 bg-slate-100 relative">
+                                {(() => {
+                                    // Mock coordinates for demo if no real data
+                                    const riderLat = 40.7128 + (Math.random() * 0.01 - 0.005);
+                                    const riderLng = -74.0060 + (Math.random() * 0.01 - 0.005);
+
+                                    return (
+                                        <MapContainer
+                                            center={[riderLat, riderLng]}
+                                            zoom={14}
+                                            className="w-full h-full"
+                                            zoomControl={false}
+                                        >
+                                            <TileLayer
+                                                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                            />
+
+                                            {/* Rider Marker */}
+                                            <Marker position={[riderLat, riderLng]}>
+                                                <Popup>
+                                                    <div className="text-center">
+                                                        <p className="font-bold">{selectedRider.name}</p>
+                                                        <p className="text-xs text-slate-500">Current Location</p>
+                                                    </div>
+                                                </Popup>
+                                            </Marker>
+
+                                            {/* Task Marker if exists */}
+                                            {(() => {
+                                                const activeTask = tasks.find(t => t.id.includes(selectedRider.id.slice(-2)) && (t.status === 'IN_PROGRESS' || t.status === 'ACCEPTED'));
+                                                if (activeTask && activeTask.endCoordinates) {
+                                                    return (
+                                                        <Marker position={[activeTask.endCoordinates.lat, activeTask.endCoordinates.lng]}>
+                                                            <Popup>
+                                                                <div className="text-center">
+                                                                    <p className="font-bold">Destination</p>
+                                                                    <p className="text-xs text-slate-500">{activeTask.address}</p>
+                                                                </div>
+                                                            </Popup>
+                                                        </Marker>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
+                                        </MapContainer>
+                                    );
+                                })()}
+
+                                <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-md p-2 rounded-lg shadow-lg border border-white/60 text-xs text-slate-500 z-[1000]">
+                                    Live GPS Tracking Active
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

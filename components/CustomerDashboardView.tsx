@@ -24,16 +24,30 @@ export const CustomerDashboardView: React.FC<CustomerDashboardViewProps> = ({ cu
     useEffect(() => {
         const loadShipments = async () => {
             setLoading(true);
-            const allShipments = await mockDataService.getShipments();
+            try {
+                // Load shipments from Firestore
+                const { firebaseService } = await import('../services/firebaseService');
+                const allShipments = await firebaseService.queryDocuments<Shipment>('shipments', []);
 
-            // Filter for user's shipments
-            const userShipments = allShipments.filter(s =>
-                s.senderId === currentUser.id ||
-                s.recipientEmail === currentUser.email ||
-                (currentUser.role === 'CUSTOMER' && ['TRK-112233', 'TRK-885210', 'TRK-998877'].includes(s.id))
-            );
+                // Filter for user's shipments
+                const userShipments = allShipments.filter(s =>
+                    s.customerId === currentUser.id ||
+                    s.recipientEmail === currentUser.email
+                );
 
-            setShipments(userShipments);
+                setShipments(userShipments);
+            } catch (error) {
+                console.error('Failed to load shipments from Firestore:', error);
+                // Fallback to mock data
+                const mockDataService = await import('../services/mockDataService');
+                const allShipments = await mockDataService.mockDataService.getShipments();
+                const userShipments = allShipments.filter(s =>
+                    s.customerId === currentUser.id ||
+                    s.recipientEmail === currentUser.email ||
+                    (currentUser.role === 'CUSTOMER' && ['TRK-112233', 'TRK-885210', 'TRK-998877'].includes(s.id))
+                );
+                setShipments(userShipments);
+            }
             setLoading(false);
         };
 
@@ -281,8 +295,8 @@ export const CustomerDashboardView: React.FC<CustomerDashboardViewProps> = ({ cu
                 <button
                     onClick={() => setActiveTab('OVERVIEW')}
                     className={`px-6 py-2.5 rounded-xl font-medium transition-all flex items-center gap-2 ${activeTab === 'OVERVIEW'
-                            ? 'bg-indigo-600 text-white shadow-md'
-                            : 'text-slate-600 hover:bg-slate-50'
+                        ? 'bg-indigo-600 text-white shadow-md'
+                        : 'text-slate-600 hover:bg-slate-50'
                         }`}
                 >
                     <LayoutDashboard size={18} />
@@ -291,8 +305,8 @@ export const CustomerDashboardView: React.FC<CustomerDashboardViewProps> = ({ cu
                 <button
                     onClick={() => setActiveTab('ORDERS')}
                     className={`px-6 py-2.5 rounded-xl font-medium transition-all flex items-center gap-2 ${activeTab === 'ORDERS'
-                            ? 'bg-indigo-600 text-white shadow-md'
-                            : 'text-slate-600 hover:bg-slate-50'
+                        ? 'bg-indigo-600 text-white shadow-md'
+                        : 'text-slate-600 hover:bg-slate-50'
                         }`}
                 >
                     <Package size={18} />

@@ -123,7 +123,7 @@ export const signInWithEmail = async (email: string, password: string): Promise<
 
   // Fallback if user not found in Firestore (e.g. legacy user or sync issue)
   if (!user) {
-    console.warn('User not found in Firestore, using default customer role');
+    console.warn('User not found in Firestore, creating user document');
     user = {
       id: firebaseUser.uid,
       email: firebaseUser.email || email,
@@ -132,6 +132,15 @@ export const signInWithEmail = async (email: string, password: string): Promise<
       role: 'CUSTOMER', // Default fallback
       status: 'ACTIVE'
     };
+
+    // Save the user document to Firestore
+    try {
+      await firebaseService.addUser(user);
+      console.log('User document created in Firestore');
+    } catch (e) {
+      console.error('Failed to create user document in Firestore', e);
+      // Continue anyway - user can still use the app
+    }
   }
 
   // Set API token so backend requests are authenticated
@@ -157,45 +166,69 @@ export const signOut = async (): Promise<void> => {
 };
 
 // Google Sign-In (defaults to CUSTOMER role)
+// Google Sign-In (defaults to CUSTOMER role)
 export const signInWithGoogle = async (): Promise<User> => {
-  const provider = new GoogleAuthProvider();
-  const cred = await signInWithPopup(auth, provider);
-  const firebaseUser = cred.user;
-
-  // Check if user already exists in Firestore
-  let user: User | null = null;
   try {
-    user = await firebaseService.getUser(firebaseUser.uid);
-  } catch (e) {
-    console.error('Failed to fetch user from Firestore', e);
-  }
+    const provider = new GoogleAuthProvider();
+    const cred = await signInWithPopup(auth, provider);
+    const firebaseUser = cred.user;
 
-  // If user doesn't exist, create new user with CUSTOMER role
-  if (!user) {
-    user = {
-      id: firebaseUser.uid,
-      email: firebaseUser.email || '',
-      name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-      phone: firebaseUser.phoneNumber || '',
-      role: 'CUSTOMER', // Default to CUSTOMER for Google sign-ins
-      status: 'ACTIVE'
-    };
-
-    // Save to Firestore
+    // Check if user already exists in Firestore
+    let user: User | null = null;
     try {
-      await firebaseService.addUser(user);
+      user = await firebaseService.getUser(firebaseUser.uid);
     } catch (e) {
-      console.error('Failed to save Google user to Firestore', e);
+      console.error('Failed to fetch user from Firestore', e);
     }
-  }
 
-  // Set API token
-  try {
-    const token = await firebaseUser.getIdToken();
-    apiService.setToken(token);
-  } catch (e) {
-    console.warn('Failed to get id token after Google sign in', e);
-  }
+    // If user doesn't exist, create new user with CUSTOMER role
+    if (!user) {
+      user = {
+        id: firebaseUser.uid,
+        email: firebaseUser.email || '',
+        name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+        phone: firebaseUser.phoneNumber || '',
+        role: 'CUSTOMER', // Default to CUSTOMER for Google sign-ins
+        status: 'ACTIVE'
+      };
 
-  return user;
+      // Save to Firestore
+      try {
+        await firebaseService.addUser(user);
+      } catch (e) {
+        console.error('Failed to save Google user to Firestore', e);
+      }
+    }
+
+    // Set API token
+    try {
+      const token = await firebaseUser.getIdToken();
+      apiService.setToken(token);
+    } catch (e) {
+      console.warn('Failed to get id token after Google sign in', e);
+    }
+
+    return user;
+  } catch (error: any) {
+    console.error('Google Sign-In Error:', error);
+
+    // Map Firebase errors to user-friendly messages
+    if (error.code === 'auth/popup-closed-by-user') {
+      throw new Error('Sign-in cancelled. You closed the popup.');
+    }
+    if (error.code === 'auth/popup-blocked') {
+      throw new Error('Sign-in popup was blocked. Please allow popups for this site.');
+    }
+    if (error.code === 'auth/cancelled-popup-request') {
+      throw new Error('Only one sign-in attempt allowed at a time.');
+    }
+    if (error.code === 'auth/operation-not-allowed') {
+      throw new Error('Google Sign-In is not enabled. Please contact support.');
+    }
+    if (error.code === 'auth/unauthorized-domain') {
+      throw new Error('This domain is not authorized for Google Sign-In.');
+    }
+
+    throw new Error(error.message || 'Failed to sign in with Google. Please try again.');
+  }
 };

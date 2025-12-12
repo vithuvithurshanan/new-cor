@@ -13,10 +13,12 @@ import {
   onSnapshot,
   serverTimestamp,
   Timestamp,
-  setDoc
+  setDoc,
+  DocumentData,
+  QueryConstraint
 } from 'firebase/firestore';
 import { db } from '../firebaseClient';
-import { Shipment, User, Vehicle, Hub, RiderTask } from '../types';
+import { Shipment, User, Vehicle, Hub, RiderTask, AppNotification } from '../types';
 
 export class FirebaseService {
   // Generic CRUD operations
@@ -239,6 +241,176 @@ export class FirebaseService {
 
   async updateRiderTaskStatus(taskId: string, status: RiderTask['status']): Promise<void> {
     return this.updateDocument<RiderTask>('riderTasks', taskId, { status });
+  }
+
+  // Notification methods
+  async addNotification(notification: Omit<AppNotification, 'id' | 'createdAt'>): Promise<string> {
+    return this.addDocument<AppNotification>('notifications', {
+      ...notification,
+      read: false
+    } as any);
+  }
+
+  async getUserNotifications(userId: string): Promise<AppNotification[]> {
+    return this.queryDocuments<AppNotification>('notifications', [
+      { field: 'userId', operator: '==', value: userId }
+    ], 'createdAt', 50);
+  }
+
+  async markNotificationAsRead(notificationId: string): Promise<void> {
+    return this.updateDocument<AppNotification>('notifications', notificationId, { read: true });
+  }
+  async assignRouteShipments(riderId: string, referenceShipmentId: string): Promise<number> {
+    try {
+      // 1. Get the reference shipment to find the location
+      const refShipment = await this.getShipment(referenceShipmentId);
+      if (!refShipment) return 0;
+
+      const currentCity = refShipment.pickupAddress.city;
+
+      // 2. Get all PLACED shipments
+      // Note: In a real app, we'd use a compound query, but for now we'll filter in memory for simplicity/flexibility with mock data structure
+      const allShipments = await this.queryDocuments<Shipment>('shipments', [
+        { field: 'currentStatus', operator: '==', value: 'PLACED' }
+      ]);
+
+      // 3. Filter for same city
+      const routeShipments = allShipments.filter(s =>
+        s.pickupAddress.city.toLowerCase() === currentCity.toLowerCase() &&
+        s.id !== referenceShipmentId // Don't re-assign the current one (though it shouldn't be PLACED)
+      );
+
+      if (routeShipments.length === 0) return 0;
+
+      // 4. Assign them to the rider
+      let assignedCount = 0;
+      for (const shipment of routeShipments) {
+        // Update Shipment
+        await this.updateDocument('shipments', shipment.id, {
+          riderId: riderId,
+          currentStatus: 'PICKUP_ASSIGNED'
+        });
+
+        // Create Rider Task
+        await this.addRiderTask({
+          riderId: riderId,
+          type: 'PICKUP',
+          status: 'PENDING',
+          address: `${shipment.pickupAddress.street}, ${shipment.pickupAddress.city}`,
+          customerName: shipment.recipientName,
+          timeSlot: 'ASAP',
+          packageDetails: shipment.description || 'Package',
+          earnings: shipment.price ? shipment.price * 0.8 : 15.00,
+          distance: `${shipment.distanceMiles || 0} miles`,
+          shipmentId: shipment.id,
+          startCoordinates: shipment.pickupAddress.coordinates || { lat: 40.7128, lng: -74.0060 },
+          endCoordinates: shipment.dropoffAddress.coordinates || { lat: 40.7489, lng: -73.9680 }
+        });
+
+        // Notify Rider
+        await this.addNotification({
+          userId: riderId,
+          title: 'New Route Assignment',
+          message: `A new pickup at ${shipment.pickupAddress.street} has been added to your route.`,
+          type: 'INFO',
+          read: false,
+          relatedId: shipment.id
+        });
+
+        assignedCount++;
+      }
+
+      // Check if vehicle needs upgrade based on new load
+      if (assignedCount > 0) {
+        await this.assignVehicleToRiderBasedOnLoad(riderId);
+      }
+
+      return assignedCount;
+    } catch (error) {
+      console.error('Error in assignRouteShipments:', error);
+      return 0;
+    }
+  }
+
+  // Helper to parse capacity string (e.g., "2000kg" -> 2000)
+  private parseCapacity(capacityStr: string): number {
+    const match = capacityStr.match(/(\d+)/);
+    return match ? parseInt(match[0], 10) : 0;
+  }
+
+  async assignVehicleToRiderBasedOnLoad(riderId: string): Promise<string | null> {
+    try {
+      // 1. Fetch all active shipments for the rider
+      // In a real app, we would query riderTasks or shipments directly.
+      // For now, we'll query shipments where riderId matches and status is not DELIVERED
+      const shipments = await this.queryDocuments<Shipment>('shipments', [
+        { field: 'riderId', operator: '==', value: riderId }
+      ]);
+
+      const activeShipments = shipments.filter(s => s.currentStatus !== 'DELIVERED' && s.currentStatus !== 'CANCELLED');
+      const totalWeight = activeShipments.reduce((sum, s) => sum + (s.weight || 0), 0);
+
+      console.log(`Rider ${riderId} Total Load: ${totalWeight}kg`);
+
+      // 2. Fetch rider's current vehicle
+      const allVehicles = await this.getAllVehicles();
+      const currentVehicle = allVehicles.find(v => v.currentDriverId === riderId);
+
+      // 3. Check if current vehicle is sufficient
+      if (currentVehicle) {
+        const capacity = this.parseCapacity(currentVehicle.capacity);
+        if (capacity >= totalWeight) {
+          console.log(`Current vehicle ${currentVehicle.id} (${capacity}kg) is sufficient.`);
+          return currentVehicle.id;
+        }
+        console.log(`Current vehicle ${currentVehicle.id} (${capacity}kg) is insufficient for ${totalWeight}kg.`);
+      }
+
+      // 4. Find a suitable available vehicle
+      const availableVehicles = allVehicles.filter(v => v.status === 'AVAILABLE');
+
+      // Sort by capacity ascending to find the smallest sufficient vehicle
+      const suitableVehicle = availableVehicles
+        .sort((a, b) => this.parseCapacity(a.capacity) - this.parseCapacity(b.capacity))
+        .find(v => this.parseCapacity(v.capacity) >= totalWeight);
+
+      if (suitableVehicle) {
+        console.log(`Found suitable vehicle: ${suitableVehicle.id} (${suitableVehicle.capacity})`);
+
+        // Unassign current vehicle if any
+        if (currentVehicle) {
+          await this.updateDocument('vehicles', currentVehicle.id, {
+            status: 'AVAILABLE',
+            currentDriverId: undefined
+          });
+        }
+
+        // Assign new vehicle
+        await this.updateDocument('vehicles', suitableVehicle.id, {
+          status: 'IN_USE',
+          currentDriverId: riderId
+        });
+
+        // Notify Rider
+        await this.addNotification({
+          userId: riderId,
+          title: 'Vehicle Upgraded',
+          message: `Your vehicle has been upgraded to ${suitableVehicle.type} (${suitableVehicle.plateNumber}) to handle the load.`,
+          type: 'WARNING',
+          read: false
+        });
+
+        return suitableVehicle.id;
+      } else {
+        console.warn('No suitable vehicle found for the load.');
+        // Optionally notify admin
+        return null;
+      }
+
+    } catch (error) {
+      console.error('Error in assignVehicleToRiderBasedOnLoad:', error);
+      return null;
+    }
   }
 }
 

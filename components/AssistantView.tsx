@@ -69,17 +69,42 @@ export const AssistantView: React.FC<AssistantViewProps> = ({ currentUser }) => 
     setMessages(prev => [...prev, userMsg]);
     setIsTyping(true);
 
-    const stats = await mockDataService.getDashboardStats();
-    const responseText = await generateWeeklyBusinessForecast(stats);
+    try {
+      const { firebaseService } = await import('../services/firebaseService');
+      const [userList, shipmentList] = await Promise.all([
+        firebaseService.queryDocuments('users', []),
+        firebaseService.queryDocuments('shipments', [])
+      ]);
 
-    const botMsg: Message = {
-      id: (Date.now() + 1).toString(),
-      role: 'bot',
-      text: responseText,
-      timestamp: new Date()
-    };
+      const stats = {
+        totalShipments: shipmentList.length,
+        activeShipments: shipmentList.filter((s: any) => s.currentStatus !== 'DELIVERED').length,
+        totalRevenue: shipmentList.reduce((sum: number, s: any) => sum + (s.price || 0), 0),
+        totalUsers: userList.length
+      };
 
-    setMessages(prev => [...prev, botMsg]);
+      const responseText = await generateWeeklyBusinessForecast(stats);
+
+      const botMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'bot',
+        text: responseText,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, botMsg]);
+    } catch (error) {
+      console.error('Firestore error, using mock data:', error);
+      const stats = await mockDataService.getDashboardStats();
+      const responseText = await generateWeeklyBusinessForecast(stats);
+
+      const botMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'bot',
+        text: responseText,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, botMsg]);
+    }
     setIsTyping(false);
   };
 

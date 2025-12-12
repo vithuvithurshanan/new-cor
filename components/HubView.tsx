@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Hub, StorageRack, HubManifest } from '../types';
 import { suggestStorageLocation, optimizeHubRouting } from '../services/geminiService';
 import { mockDataService } from '../services/mockDataService';
-import { Warehouse, Scan, Truck, Box, Layers, ArrowRightLeft, AlertCircle, CheckCircle, Search, Map as MapIcon, BarChart3, PackagePlus, ArrowRight, Loader2, Sparkles } from 'lucide-react';
+import { Scan, Truck, Box, Layers, ArrowRightLeft, AlertCircle, Map as MapIcon, BarChart3, PackagePlus, Loader2, Sparkles } from 'lucide-react';
 
 // --- MOCK DATA (Racks and Manifests still mocked locally for now as they are specific to this view) ---
 const MOCK_RACKS: StorageRack[] = [
@@ -42,10 +42,22 @@ export const HubView: React.FC<HubViewProps> = ({ initialTab = 'DASHBOARD' }) =>
   const [selectedHub, setSelectedHub] = useState<Hub | null>(null);
   const [editHubForm, setEditHubForm] = useState({ name: '', manager: '', capacity: 0 });
 
+  // Sync activeTab with initialTab prop when it changes (navigation from main sidebar)
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
   useEffect(() => {
     const loadHubs = async () => {
-      const data = await mockDataService.getHubs();
-      setHubs(data);
+      try {
+        const { firebaseService } = await import('../services/firebaseService');
+        const data = await firebaseService.queryDocuments<Hub>('hubs', []);
+        setHubs(data);
+      } catch (error) {
+        console.error('Firestore error, using mock data:', error);
+        const data = await mockDataService.getHubs();
+        setHubs(data);
+      }
     };
     loadHubs();
   }, []);
@@ -431,36 +443,9 @@ export const HubView: React.FC<HubViewProps> = ({ initialTab = 'DASHBOARD' }) =>
     </div>
   );
 
-  const SidebarItem = ({ id, label, icon: Icon }: { id: HubTab, label: string, icon: any }) => (
-    <button
-      onClick={() => setActiveTab(id)}
-      className={`
-        w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all
-        ${activeTab === id ? 'bg-indigo-600/10 text-indigo-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}
-      `}
-    >
-      <Icon size={18} />
-      {label}
-    </button>
-  );
-
   return (
-    <div className="flex flex-col lg:flex-row gap-8">
-      {/* Sub Sidebar */}
-      <div className="w-full lg:w-64 flex-shrink-0">
-        <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-lg border border-white/60 p-4 sticky top-6">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 px-4">Warehouse Ops</h3>
-          <div className="space-y-1">
-            <SidebarItem id="DASHBOARD" label="Overview" icon={BarChart3} />
-            <SidebarItem id="INBOUND" label="Inbound Scan" icon={Scan} />
-            <SidebarItem id="OUTBOUND" label="Outbound" icon={ArrowRight} />
-            <SidebarItem id="INVENTORY" label="Storage" icon={Warehouse} />
-            <SidebarItem id="NETWORK" label="Hub Network" icon={MapIcon} />
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
+    <div className="flex flex-col gap-8">
+      {/* Main Content - Full Width now */}
       <div className="flex-1">
         {renderContent()}
       </div>

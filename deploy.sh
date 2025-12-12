@@ -16,7 +16,7 @@ echo "✅ Build completed successfully!"
 
 # Deploy to Firebase
 echo "🔥 Deploying to Firebase..."
-firebase deploy --only hosting:chat-app-6dfa7-2a6bf
+npx firebase deploy --only hosting:chat-app-6dfa7-2a6bf
 
 if [ $? -eq 0 ]; then
     echo "✅ Deployment successful!"

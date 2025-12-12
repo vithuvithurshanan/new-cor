@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { PricingConfig } from '../types';
 import { optimizePricingRules } from '../services/geminiService';
-import { Sparkles, Loader2, DollarSign, CreditCard, Sliders, Activity, FileText, TrendingUp, PieChart as PieChartIcon, Building2, BarChart3 } from 'lucide-react';
+import { Sparkles, Loader2, DollarSign, CreditCard, Sliders, Activity, FileText, TrendingUp, PieChart as PieChartIcon, Building2 } from 'lucide-react';
 
 const CHART_DATA = [
     { name: 'Mon', shipments: 120, revenue: 2400, profit: 1200, cost: 1200 },
@@ -56,6 +56,11 @@ interface AccountDashboardViewProps {
 export const AccountDashboardView: React.FC<AccountDashboardViewProps> = ({ initialTab = 'OVERVIEW' }) => {
     const [activeTab, setActiveTab] = useState<AccountTab>(initialTab);
     const [loadingAi, setLoadingAi] = useState(false);
+
+    // Sync activeTab with initialTab prop when it changes (navigation from main sidebar)
+    useEffect(() => {
+        setActiveTab(initialTab);
+    }, [initialTab]);
 
     // -- PRICING STATES --
     const [pricing, setPricing] = useState<PricingConfig>(INITIAL_PRICING);
@@ -463,34 +468,9 @@ export const AccountDashboardView: React.FC<AccountDashboardViewProps> = ({ init
         }
     };
 
-    const DashboardTab = ({ id, label, icon: Icon, active, onClick }: { id: AccountTab, label: string, icon: any, active: AccountTab, onClick: (id: AccountTab) => void }) => (
-        <button
-            onClick={() => onClick(id)}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium duration-200
-        ${active === id
-                    ? 'bg-white shadow-md text-indigo-600'
-                    : 'text-slate-500 hover:bg-white/50 hover:text-indigo-600'}
-      `}
-        >
-            <Icon size={18} />
-            <span>{label}</span>
-        </button>
-    );
-
     return (
-        <div className="flex flex-col lg:flex-row gap-8 h-[calc(100vh-6rem)]">
-            {/* Sidebar for Account Dashboard */}
-            <div className="w-full lg:w-64 flex-shrink-0 space-y-2 overflow-y-auto pr-2 custom-scrollbar pb-4">
-                <div className="px-4 py-2 mb-2">
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Account & Finance</h3>
-                </div>
-                <DashboardTab id="OVERVIEW" label="Financial Overview" icon={BarChart3} active={activeTab} onClick={setActiveTab} />
-                <DashboardTab id="GOVERNMENT" label="Government Reports" icon={Building2} active={activeTab} onClick={setActiveTab} />
-                <DashboardTab id="ACTUAL" label="Actual Reports" icon={PieChartIcon} active={activeTab} onClick={setActiveTab} />
-                <DashboardTab id="PRICING" label="Smart Pricing" icon={DollarSign} active={activeTab} onClick={setActiveTab} />
-            </div>
-
-            {/* Main Content */}
+        <div className="flex flex-col gap-8 h-full">
+            {/* Main Content - Full Width now */}
             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar pb-10">
                 {renderContent()}
             </div>

@@ -234,7 +234,10 @@ class MockDataService {
   }
 
   // Rider Tasks
-  getRiderTasks(): Promise<RiderTask[]> {
+  getRiderTasks(riderId?: string): Promise<RiderTask[]> {
+    if (riderId) {
+      return Promise.resolve(this.riderTasks.filter(t => t.riderId === riderId));
+    }
     return Promise.resolve([...this.riderTasks]);
   }
 
@@ -270,7 +273,6 @@ class MockDataService {
   private vehicles: Vehicle[] = [
     { id: 'V1', type: 'TRUCK', plateNumber: 'XYZ-123', status: 'IN_USE', currentDriverId: 'U2', capacity: '2000kg', lastMaintenance: '2023-10-15' },
     { id: 'V2', type: 'VAN', plateNumber: 'ABC-789', status: 'AVAILABLE', capacity: '800kg', lastMaintenance: '2023-11-01' },
-    { id: 'V3', type: 'BIKE', plateNumber: 'BK-55', status: 'MAINTENANCE', capacity: '20kg', lastMaintenance: '2023-12-05' },
   ];
 
   getVehicles(): Promise<Vehicle[]> {
